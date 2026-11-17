@@ -3,19 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Dependencies for scripts/seed.mjs and local tests. Lambda code lives in src/ (built by SAM).",
+  "description": "Dependencies for scripts/seed.mjs and local tests. Lambda code lives in src/ (built by SAM). AWS SDK v3 is a dev dependency: the Lambda runtime already ships it.",
   "scripts": {
     "seed": "node scripts/seed.mjs",
     "test": "node scripts/test-planner.mjs"
   },
-  "dependencies": {
-    "@aws-sdk/client-dynamodb": "3.1149.0",
-    "@aws-sdk/lib-dynamodb": "3.1149.0"
-  },
   "devDependencies": {
+    "@aws-sdk/client-dynamodb": "3.1149.0",
     "@aws-sdk/client-s3": "3.1149.0",
     "@aws-sdk/client-sns": "3.1149.0",
     "@aws-sdk/client-ssm": "3.1149.0",
+    "@aws-sdk/lib-dynamodb": "3.1149.0",
     "@aws-sdk/s3-request-presigner": "3.1149.0"
   }
 }

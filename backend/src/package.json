@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Lambda handlers. DynamoDB/SNS/SSM SDK v3 clients come from the Node.js 22 runtime; S3 presigner is bundled.",
-  "dependencies": {
+  "description": "Lambda handlers. AWS SDK v3 (incl. S3 presigner) comes from the Node.js 22 Lambda runtime, so it is a dev dependency only and sam build bundles nothing.",
+  "devDependencies": {
     "@aws-sdk/client-s3": "3.1149.0",
     "@aws-sdk/s3-request-presigner": "3.1149.0"
   }

@@ -14,6 +14,31 @@ cd "$ROOT"
 
 step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 
+# CloudShell has only ~1 GB in $HOME: keep SAM build output and the npm cache in /tmp
+BUILD_DIR=/tmp/supp-sam-build
+export npm_config_cache=/tmp/supp-npm-cache
+cleanup_build() { rm -rf "$BUILD_DIR"; }
+trap cleanup_build EXIT
+
+# Stop early when there is not enough free space to build
+MIN_FREE_MB=300
+echo "Free disk space in your home directory:"
+df -h ~
+FREE_MB=$(( $(df -Pk "$ROOT" | awk 'NR==2 {print $4}') / 1024 ))
+if [ "$FREE_MB" -lt "$MIN_FREE_MB" ]; then
+  cat <<EOF
+
+Not enough free disk space: ${FREE_MB} MB free where the repo lives ($ROOT), need at least ${MIN_FREE_MB} MB.
+CloudShell's home directory holds only ~1 GB. Free some space and deploy from /tmp instead
+(/tmp has much more room but is wiped when the CloudShell session ends):
+
+  rm -rf ~/.npm ~/.cache ~/supp-shop/frontend/node_modules ~/supp-shop/backend/node_modules ~/supp-shop/backend/.aws-sam
+  cd /tmp && git clone <your-repo-url> supp-shop && cd supp-shop
+  chmod +x deploy.sh && ADMIN_EMAIL=you@example.com ./deploy.sh
+EOF
+  exit 1
+fi
+
 USE_CLOUDFRONT="${USE_CLOUDFRONT:-true}"
 case "$USE_CLOUDFRONT" in
   true | false) ;;
@@ -84,8 +109,9 @@ else
 fi
 (
   cd backend
-  sam build
+  sam build --build-dir "$BUILD_DIR"
   sam deploy \
+    --template-file "$BUILD_DIR/template.yaml" \
     --stack-name "$STACK" \
     --region "$REGION" \
     --resolve-s3 \
@@ -93,7 +119,6 @@ fi
     --no-confirm-changeset \
     --no-fail-on-empty-changeset \
     --parameter-overrides $OVERRIDES
-  rm -rf .aws-sam # free CloudShell storage
 )
 
 # ---------------------------------------------------------------- 4. Stack outputs -> frontend env
@@ -136,15 +161,20 @@ step "5/7 Building frontend and uploading to S3"
   fi
   rm -rf node_modules # CloudShell has ~1 GB home storage
 )
+# Free disk space: the SAM build output and npm cache are no longer needed
+cleanup_build
+npm cache clean --force
 
 # ---------------------------------------------------------------- 6. Seed products (once)
 step "6/7 Seeding products (skipped if the table already has items)"
 (
   cd backend
-  npm ci --omit=dev --no-audit --no-fund
+  # AWS SDK is a devDependency (the Lambda runtime ships it), so install dev deps here
+  npm ci --no-audit --no-fund
   PRODUCTS_TABLE="$PRODUCTS_TABLE" node scripts/seed.mjs
   rm -rf node_modules
 )
+npm cache clean --force
 
 # ---------------------------------------------------------------- 7. Done
 step "7/7 Done"

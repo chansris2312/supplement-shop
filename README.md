@@ -145,6 +145,13 @@ Make the script executable:
 chmod +x deploy.sh
 ```
 
+> **Out of disk space?** CloudShell's home directory is only ~1 GB. If `deploy.sh` stops with "Not enough free disk space", free space and deploy from `/tmp` (much larger, but wiped when the CloudShell session ends — just clone again next time):
+> ```bash
+> rm -rf ~/.npm ~/.cache ~/supp-shop/frontend/node_modules ~/supp-shop/backend/node_modules ~/supp-shop/backend/.aws-sam
+> cd /tmp && git clone https://github.com/<your-team>/<your-repo>.git supp-shop && cd supp-shop
+> chmod +x deploy.sh && ADMIN_EMAIL=your.name@example.com ./deploy.sh
+> ```
+
 ### 6.3 Store the API keys in SSM Parameter Store (once)
 `read -s` hides the key while you paste it and keeps it out of the shell history:
 ```bash
@@ -164,11 +171,12 @@ aws ssm describe-parameters --region us-east-1 --query "Parameters[?starts_with(
 ADMIN_EMAIL=your.name@example.com ./deploy.sh
 ```
 What the script does:
+0. Prints free disk space (`df -h ~`) and stops if less than 300 MB is free (see the note below).
 1. Checks both SSM parameters exist (if not, prints the exact `put-parameter` commands and stops).
 2. If a previous first deploy failed (stack status `ROLLBACK_COMPLETE`), empties its buckets, deletes the stack and waits until it is gone.
-3. `sam build` + `sam deploy` the stack **`supp-shop`** (first time ≈ 5–10 minutes with CloudFront, ≈ 2–3 minutes without).
+3. `sam build` into `/tmp/supp-sam-build` + `sam deploy` the stack **`supp-shop`** (first time ≈ 5–10 minutes with CloudFront, ≈ 2–3 minutes without). The AWS SDK is not bundled — the Node.js 22 Lambda runtime already includes it.
 4. Reads the stack outputs and writes `frontend/.env.production`.
-5. Builds the React app, uploads it to the site bucket, invalidates CloudFront (if used), deletes `node_modules` (CloudShell only has ~1 GB).
+5. Builds the React app, uploads it to the site bucket, invalidates CloudFront (if used), then deletes `frontend/node_modules`, `/tmp/supp-sam-build` and the npm cache (CloudShell only has ~1 GB in your home directory).
 6. Seeds the 12 products into DynamoDB (skipped if products already exist).
 7. Prints the **site URL** and next steps.
 
