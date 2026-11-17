@@ -13,7 +13,7 @@ const LINKS: { to: string; label: string; Icon: ComponentType<{ color?: string }
 ];
 
 export function Navbar() {
-  const { user, signIn } = useAuth();
+  const { user, requireLogin } = useAuth();
   const { cartCount, me } = useStore();
 
   return (
@@ -64,7 +64,7 @@ export function Navbar() {
           ) : (
             <button
               type="button"
-              onClick={signIn}
+              onClick={requireLogin}
               className="h-11 rounded-[10px] bg-primary px-5 text-[15px] font-semibold text-white hover:bg-primary-hover"
             >
               เข้าสู่ระบบ

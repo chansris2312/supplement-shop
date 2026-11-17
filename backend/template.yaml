@@ -1,9 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  NutriMate - AI supplement shop. S3 + CloudFront site, Cognito managed login, HTTP API + Lambda,
-  DynamoDB, EventBridge rules, SNS and SSM Parameter Store (Gemini + OpenAQ keys).
-  AWS Academy Learner Lab compatible: creates no IAM roles or policies (all functions use LabRole).
+  NutriMate - AI supplement shop. S3 static website (+ optional CloudFront), Cognito user pool,
+  HTTP API + Lambda, DynamoDB, EventBridge rules, SNS and SSM Parameter Store (Gemini + OpenAQ keys).
+  AWS Academy Learner Lab compatible: creates no IAM roles or policies (all functions use LabRole)
+  and no CloudFront Origin Access Control.
 
 Parameters:
   AdminEmail:
@@ -14,6 +15,14 @@ Parameters:
     Type: String
     Default: gemini-flash-latest
     Description: Gemini model id used by the planner and the weekly signal (e.g. gemini-flash-latest, gemini-2.5-flash).
+  UseCloudFront:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: '"true" = HTTPS CloudFront in front of the S3 website. "false" = use the S3 website URL (http) directly.'
+
+Conditions:
+  UseCF: !Equals [!Ref UseCloudFront, 'true']
 
 Globals:
   Function:
@@ -28,86 +37,97 @@ Globals:
         USERS_TABLE: !Ref UsersTable
         PLANS_TABLE: !Ref PlansTable
         ORDERS_TABLE: !Ref OrdersTable
-        SITE_URL: !Sub https://${Distribution.DomainName}
+        SITE_URL: !If [UseCF, !Sub 'https://${Distribution.DomainName}', !GetAtt SiteBucket.WebsiteURL]
         GEMINI_MODEL: !Ref GeminiModel
         GEMINI_KEY_PARAM: /supp/gemini-api-key
         OPENAQ_KEY_PARAM: /supp/openaq-api-key
 
 Resources:
-  # ---------------------------------------------------------------- S3 + CloudFront
+  # ---------------------------------------------------------------- S3 (+ optional CloudFront)
+  # Learner Lab denies cloudfront:CreateOriginAccessControl, so the site is a public
+  # S3 static website and CloudFront (optional) uses the website endpoint as a custom origin.
   SiteBucket:
     Type: AWS::S3::Bucket
     Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html # SPA: unknown paths (e.g. /cart) load the app
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadWebsite
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
 
   ImagesBucket:
     Type: AWS::S3::Bucket
     Properties:
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
       OwnershipControls:
         Rules:
           - ObjectOwnership: BucketOwnerEnforced
-      # Browser uploads with presigned PUT URLs. Origin "*" avoids a circular
-      # dependency on the CloudFront domain; the presigned URL itself is the access control.
+      # Admin browsers upload with presigned PUT URLs (the URL itself is the access control).
       CorsConfiguration:
         CorsRules:
-          - AllowedMethods: [PUT]
+          - AllowedMethods: [PUT, GET]
             AllowedOrigins: ['*']
             AllowedHeaders: ['*']
             MaxAge: 3000
 
-  OriginAccessControl:
-    Type: AWS::CloudFront::OriginAccessControl
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
-      OriginAccessControlConfig:
-        Name: !Sub ${AWS::StackName}-oac
-        OriginAccessControlOriginType: s3
-        SigningBehavior: always
-        SigningProtocol: sigv4
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadImages
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${ImagesBucket.Arn}/*
 
   Distribution:
     Type: AWS::CloudFront::Distribution
+    Condition: UseCF
     Properties:
       DistributionConfig:
         Enabled: true
-        Comment: NutriMate site + product images
+        Comment: NutriMate site (S3 website origin)
         DefaultRootObject: index.html
         HttpVersion: http2and3
         PriceClass: PriceClass_200
         Origins:
-          - Id: site
-            DomainName: !GetAtt SiteBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-            OriginAccessControlId: !GetAtt OriginAccessControl.Id
-          - Id: images
-            DomainName: !GetAtt ImagesBucket.RegionalDomainName
-            S3OriginConfig:
-              OriginAccessIdentity: ''
-            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+          - Id: site-website
+            # WebsiteURL = http://<bucket>.s3-website-<region>.amazonaws.com -> keep only the host
+            DomainName: !Select [2, !Split ['/', !GetAtt SiteBucket.WebsiteURL]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only # S3 website endpoints only speak HTTP
+              HTTPPort: 80
+              HTTPSPort: 443
         DefaultCacheBehavior:
-          TargetOriginId: site
+          TargetOriginId: site-website
           ViewerProtocolPolicy: redirect-to-https
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
           Compress: true
-        CacheBehaviors:
-          - PathPattern: images/*
-            TargetOriginId: images
-            ViewerProtocolPolicy: redirect-to-https
-            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
-            Compress: true
-        # SPA fallback: unknown paths (e.g. /cart) return index.html with 200
+        # SPA fallback: unknown paths return index.html with 200
         CustomErrorResponses:
           - ErrorCode: 403
             ResponseCode: 200
@@ -118,35 +138,8 @@ Resources:
             ResponsePagePath: /index.html
             ErrorCachingMinTTL: 0
 
-  SiteBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref SiteBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: { Service: cloudfront.amazonaws.com }
-            Action: s3:GetObject
-            Resource: !Sub ${SiteBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
-
-  ImagesBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ImagesBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: { Service: cloudfront.amazonaws.com }
-            Action: s3:GetObject
-            Resource: !Sub ${ImagesBucket.Arn}/*
-            Condition:
-              StringEquals:
-                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
-
   # ---------------------------------------------------------------- Cognito
+  # No hosted UI / domain: the React app has its own /login and /signup pages (Amplify signIn/signUp).
   UserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -175,34 +168,10 @@ Resources:
       UserPoolId: !Ref UserPool
       ClientName: nutrimate-web
       GenerateSecret: false
-      AllowedOAuthFlowsUserPoolClient: true
-      AllowedOAuthFlows: [code]
-      AllowedOAuthScopes: [openid, email, profile]
-      SupportedIdentityProviders: [COGNITO]
-      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      # USER_PASSWORD_AUTH needs no browser crypto, so sign-in also works on the http S3 website URL.
+      # The password still travels over HTTPS to the Cognito API.
+      ExplicitAuthFlows: [ALLOW_USER_PASSWORD_AUTH, ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
       PreventUserExistenceErrors: ENABLED
-      CallbackURLs:
-        - !Sub https://${Distribution.DomainName}/
-        - http://localhost:5173/
-      LogoutURLs:
-        - !Sub https://${Distribution.DomainName}/
-        - http://localhost:5173/
-
-  UserPoolDomain:
-    Type: AWS::Cognito::UserPoolDomain
-    Properties:
-      UserPoolId: !Ref UserPool
-      Domain: !Sub nutrimate-${AWS::AccountId}
-      ManagedLoginVersion: 2
-
-  # Managed login (v2) needs a branding style for the app client; use Cognito's default look.
-  ManagedLoginBranding:
-    Type: AWS::Cognito::ManagedLoginBranding
-    DependsOn: UserPoolDomain
-    Properties:
-      UserPoolId: !Ref UserPool
-      ClientId: !Ref UserPoolClient
-      UseCognitoProvidedValues: true
 
   AdminGroup:
     Type: AWS::Cognito::UserPoolGroup
@@ -274,7 +243,7 @@ Resources:
     Properties:
       CorsConfiguration:
         AllowOrigins:
-          - !Sub https://${Distribution.DomainName}
+          - !If [UseCF, !Sub 'https://${Distribution.DomainName}', !GetAtt SiteBucket.WebsiteURL]
           - http://localhost:5173
         AllowHeaders: [authorization, content-type]
         AllowMethods: [GET, PUT, POST, OPTIONS]
@@ -301,6 +270,8 @@ Resources:
       Environment:
         Variables:
           IMAGES_BUCKET: !Ref ImagesBucket
+          # Product images are served straight from S3 (public-read bucket policy)
+          IMAGES_BASE_URL: !Sub https://${ImagesBucket.RegionalDomainName}
       Events:
         List:
           Type: HttpApi
@@ -447,17 +418,16 @@ Outputs:
     Value: !Ref UserPool
   UserPoolClientId:
     Value: !Ref UserPoolClient
-  CognitoDomain:
-    Description: Managed login domain (no https://)
-    Value: !Sub ${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
   SiteBucket:
     Value: !Ref SiteBucket
   ImagesBucket:
     Value: !Ref ImagesBucket
   DistributionId:
-    Value: !Ref Distribution
+    Description: CloudFront distribution id, or "none" when UseCloudFront=false
+    Value: !If [UseCF, !Ref Distribution, 'none']
   SiteUrl:
-    Value: !Sub https://${Distribution.DomainName}
+    Description: Open this URL (CloudFront https, or the S3 website http URL)
+    Value: !If [UseCF, !Sub 'https://${Distribution.DomainName}', !GetAtt SiteBucket.WebsiteURL]
   ProductsTable:
     Description: Used by scripts/seed.mjs
     Value: !Ref ProductsTable

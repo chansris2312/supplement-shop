@@ -37,17 +37,17 @@ Build everything in this file. Do not ask for confirmation between steps; make r
    └─ scripts/seed.mjs       # seeds 12 products
 ```
 
-- Auth in the frontend: AWS Amplify v6 (`aws-amplify`, Auth only) with Cognito **managed login / hosted UI**, `signInWithRedirect`, code flow. No custom login page needed.
+- Auth in the frontend: AWS Amplify v6 (`aws-amplify`, Auth only) — `signUp`, `confirmSignUp`, `signIn` (`USER_PASSWORD_AUTH`), `signOut` with in-app Thai pages `/login` and `/signup` (email + password, confirmation-code step). **No Cognito hosted UI / domain** (Learner Lab). Must work on http (S3 website URL) and https.
 - Mock mode: when `VITE_USE_MOCK=true`, the frontend uses in-memory mock API + mock user and runs fully on `npm run dev` with no AWS.
 
 ## 3. AWS architecture (backend/template.yaml)
 
 | Resource | Details |
 |---|---|
-| S3 bucket (site) | Private; served only via CloudFront (Origin Access Control). |
-| S3 bucket (images) | Product images; served via the same CloudFront distribution under `/images/*`. |
-| CloudFront | Default root `index.html`; SPA fallback: 403/404 → `/index.html` 200. HTTPS. |
-| Cognito | User Pool (email sign-in) + App Client (no secret, OAuth code flow, scopes openid email profile) + domain. Callback/logout URLs = CloudFront URL and `http://localhost:5173`. Group `admin`. |
+| S3 bucket (site) | Static website hosting (IndexDocument + ErrorDocument `index.html`), Block Public Access off, public `s3:GetObject` bucket policy. **No OAC/OAI** (Learner Lab denies `cloudfront:CreateOriginAccessControl`). |
+| S3 bucket (images) | Product images; public-read bucket policy; `imageUrl` = direct S3 URL. |
+| CloudFront | Optional (parameter `UseCloudFront`, default `"true"`; `deploy.sh` reads `USE_CLOUDFRONT`). Origin = S3 **website endpoint** as `CustomOriginConfig` (http-only). SPA fallback: 403/404 → `/index.html` 200. HTTPS. When `"false"`: no distribution, `SiteUrl` = bucket website URL. |
+| Cognito | User Pool (email sign-in, email verification code) + App Client (no secret; `ALLOW_USER_PASSWORD_AUTH`, `ALLOW_USER_SRP_AUTH`, `ALLOW_REFRESH_TOKEN_AUTH`). No domain / hosted UI. Group `admin`. |
 | API Gateway HTTP API | Routes in section 4. JWT authorizer = the Cognito pool. CORS for CloudFront URL and localhost:5173. |
 | Lambda (Node.js 22) | One function per area: products, cart, orders, quiz, me, weeklySignal, lowStock. Learner Lab: the template creates **no IAM roles or policies**; every function sets `Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole`. |
 | DynamoDB | 4 tables, on-demand (section 5). |
@@ -56,7 +56,7 @@ Build everything in this file. Do not ask for confirmation between steps; make r
 | SSM Parameter Store | `/supp/gemini-api-key`, `/supp/openaq-api-key` (SecureString, created manually before deploy). Lambdas read them **at runtime** with `GetParameter WithDecryption` and cache in memory. Never put keys in code, env files or Git. |
 | CloudWatch Logs | Default for every Lambda. |
 
-Template parameters: `AdminEmail`, `GeminiModel` (default a current Gemini Flash model name; make it easy to change). Outputs: `ApiUrl`, `UserPoolId`, `UserPoolClientId`, `CognitoDomain`, `SiteBucket`, `ImagesBucket`, `DistributionId`, `SiteUrl`.
+Template parameters: `AdminEmail`, `GeminiModel` (default a current Gemini Flash model name; make it easy to change), `UseCloudFront`. Outputs: `ApiUrl`, `UserPoolId`, `UserPoolClientId`, `SiteBucket`, `ImagesBucket`, `DistributionId` (`none` without CloudFront), `SiteUrl`.
 
 ## 4. API routes (prefix `/api`)
 
@@ -122,7 +122,7 @@ How to read the reference files: each `.dc.html` is a static mockup in a small t
 2. **Page header** under the navbar: transparent, padding 24px 32px 0, `h1` Prompt 600 24px on the left, page action on the right.
 3. **Main**: padding 28px 32px 48px, full width.
 
-Routes needing login: /quiz, /result, /cart, /history (redirect to sign-in). Shop is public; "+ ตะกร้า" when signed out → sign in.
+Routes needing login: /quiz, /result, /cart, /history (redirect to `/login?next=...`). Shop is public; "+ ตะกร้า" when signed out → sign in.
 
 ### 6.3 Shop (`/`) — `design/app/Shop.dc.html`
 - Header: title `ร้านค้า`; right: search input (320px, bg `#F4FAF9`, placeholder `ค้นหาสินค้า เช่น คอลลาเจน`).
@@ -222,8 +222,9 @@ Products with `stock < 10` → one email to `supp-admin-alerts`.
 
 `deploy.sh` (bash, `set -euo pipefail`, runnable in AWS CloudShell):
 1. Check that `/supp/gemini-api-key` and `/supp/openaq-api-key` exist in SSM; if not, print the exact `aws ssm put-parameter` commands and exit.
-2. `cd backend && sam build && sam deploy --stack-name supp-shop --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides AdminEmail=$ADMIN_EMAIL` (ask for `ADMIN_EMAIL` if unset).
-3. Read stack outputs; write `frontend/.env.production` (`VITE_API_URL`, `VITE_USER_POOL_ID`, `VITE_USER_POOL_CLIENT_ID`, `VITE_COGNITO_DOMAIN`, `VITE_SITE_URL`, `VITE_USE_MOCK=false`).
+   Then, if the stack status is `ROLLBACK_COMPLETE`, empty its buckets, delete it and wait until it is gone.
+2. `cd backend && sam build && sam deploy --stack-name supp-shop --resolve-s3 --capabilities CAPABILITY_IAM --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides AdminEmail=$ADMIN_EMAIL UseCloudFront=$USE_CLOUDFRONT` (ask for `ADMIN_EMAIL` if unset; `USE_CLOUDFRONT` defaults to `true`).
+3. Read stack outputs; write `frontend/.env.production` (`VITE_API_URL`, `VITE_USER_POOL_ID`, `VITE_USER_POOL_CLIENT_ID`, `VITE_SITE_URL`, `VITE_USE_MOCK=false`).
 4. `cd frontend && npm ci && npm run build && aws s3 sync dist/ s3://$SITE_BUCKET --delete && aws cloudfront create-invalidation ...`; then `rm -rf node_modules` (CloudShell has ~1 GB home storage).
 5. Run `node backend/scripts/seed.mjs` once (skip if Products already has items).
 6. Print the site URL and next steps (confirm SNS emails, add yourself to the `admin` group command).

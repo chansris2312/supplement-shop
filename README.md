@@ -25,10 +25,11 @@ Privacy: the AI only receives the questionnaire answers and the product list —
 
 ```mermaid
 flowchart LR
-  U[Browser<br/>React SPA] -->|HTTPS| CF[Amazon CloudFront]
-  CF -->|OAC| S3S[(S3 site bucket)]
-  CF -->|/images/* OAC| S3I[(S3 images bucket)]
-  U -->|Sign in / sign up| COG[Amazon Cognito<br/>managed login]
+  U[Browser<br/>React SPA] -->|HTTPS| CF[Amazon CloudFront<br/>optional]
+  CF -->|HTTP custom origin| S3S[(S3 static website<br/>public-read)]
+  U -.->|http, when USE_CLOUDFRONT=false| S3S
+  U -->|product images| S3I[(S3 images bucket<br/>public-read)]
+  U -->|signUp / confirmSignUp / signIn<br/>in-app /login & /signup| COG[Amazon Cognito<br/>user pool]
   U -->|JWT /api/*| API[API Gateway<br/>HTTP API]
   API -->|JWT authorizer| COG
   API --> LP[Lambda products]
@@ -62,9 +63,9 @@ Everything is defined in one AWS SAM template: [`backend/template.yaml`](backend
 
 | # | Service | Used for |
 |---|---|---|
-| 1 | **Amazon S3** | Private bucket for the website files, private bucket for product images |
-| 2 | **Amazon CloudFront** | HTTPS, serves the SPA (403/404 → `index.html`) and `/images/*` via Origin Access Control |
-| 3 | **Amazon Cognito** | User pool (email sign-in), managed login pages, `admin` group |
+| 1 | **Amazon S3** | Static website hosting for the React app (public-read), public-read bucket for product images (direct S3 URLs) |
+| 2 | **Amazon CloudFront** | HTTPS in front of the S3 **website endpoint** (custom origin, no OAC/OAI), SPA fallback 403/404 → `/index.html`. Optional: `USE_CLOUDFRONT=false` skips it |
+| 3 | **Amazon Cognito** | User pool (email + password, email verification code), `admin` group. The app has its own Thai `/login` and `/signup` pages (Amplify `signUp` / `confirmSignUp` / `signIn`) — no hosted UI |
 | 4 | **Amazon API Gateway (HTTP API)** | `/api/*` routes, JWT authorizer, CORS |
 | 5 | **AWS Lambda** | 7 Node.js 22 functions: products, cart, orders, quiz, me, weeklySignal, lowStock |
 | 6 | **Amazon DynamoDB** | 4 on-demand tables: Products, Users, Plans, Orders |
@@ -100,15 +101,18 @@ This project is built to deploy into an **AWS Academy Learner Lab** account, whi
 3. **LabRole instead of new IAM roles.** Learner Lab does not allow creating IAM roles or policies, so the template creates **none**:
    - every Lambda runs as the existing **`LabRole`** (`arn:aws:iam::<account-id>:role/LabRole`);
    - the weekly / daily jobs are **EventBridge rules** that call Lambda through a resource-based permission (no role);
-   - API Gateway also calls Lambda through resource-based permissions, and CloudFront reads S3 through bucket policies.
+   - API Gateway also calls Lambda through resource-based permissions.
+   - **No CloudFront Origin Access Control** (Learner Lab denies `cloudfront:CreateOriginAccessControl`): the site bucket is a **public S3 static website** and CloudFront uses its website endpoint as a normal HTTP origin. Product images are public-read objects served directly from S3.
+   - **No Cognito hosted UI / domain**: sign-up and sign-in happen on the app's own `/login` and `/signup` pages.
 
    Check that LabRole exists:
    ```bash
    aws iam get-role --role-name LabRole --query Role.Arn --output text
    ```
-4. **Sessions expire, resources stay.** A lab session lasts about 4 hours. When the timer reaches 0 your console/CloudShell session ends (you will see `ExpiredToken` errors), but the deployed stack, tables, buckets, CloudFront, SSM parameters and data **stay**. Click **Start Lab** again to continue; your CloudShell home folder (with the cloned repo) is usually still there — if not, clone again and re-run `./deploy.sh` (it only updates what changed).
-5. **Before a demo** start the lab, open the site once, and if the Monday job did not run while the lab was stopped, trigger it manually (section 8).
-6. **Budget.** Learner Lab has a fixed credit; this app costs almost nothing (section 10), but delete the stack when you are finished (section 9).
+4. **If CloudFront is not allowed in your lab**, deploy without it: `USE_CLOUDFRONT=false ADMIN_EMAIL=you@example.com ./deploy.sh`. The site URL is then the S3 website URL (`http://<bucket>.s3-website-us-east-1.amazonaws.com`, HTTP only). Login still works because the password is sent to Cognito over HTTPS, but prefer CloudFront (HTTPS) when you can.
+5. **Sessions expire, resources stay.** A lab session lasts about 4 hours. When the timer reaches 0 your console/CloudShell session ends (you will see `ExpiredToken` errors), but the deployed stack, tables, buckets, CloudFront, SSM parameters and data **stay**. Click **Start Lab** again to continue; your CloudShell home folder (with the cloned repo) is usually still there — if not, clone again and re-run `./deploy.sh` (it only updates what changed).
+6. **Before a demo** start the lab, open the site once, and if the Monday job did not run while the lab was stopped, trigger it manually (section 8).
+7. **Budget.** Learner Lab has a fixed credit; this app costs almost nothing (section 10), but delete the stack when you are finished (section 9).
 
 ---
 
@@ -161,11 +165,17 @@ ADMIN_EMAIL=your.name@example.com ./deploy.sh
 ```
 What the script does:
 1. Checks both SSM parameters exist (if not, prints the exact `put-parameter` commands and stops).
-2. `sam build` + `sam deploy` the stack **`supp-shop`** (first time ≈ 5–10 minutes, mostly CloudFront).
-3. Reads the stack outputs and writes `frontend/.env.production`.
-4. Builds the React app, uploads it to the site bucket, invalidates CloudFront, deletes `node_modules` (CloudShell only has ~1 GB).
-5. Seeds the 12 products into DynamoDB (skipped if products already exist).
-6. Prints the **site URL** and next steps.
+2. If a previous first deploy failed (stack status `ROLLBACK_COMPLETE`), empties its buckets, deletes the stack and waits until it is gone.
+3. `sam build` + `sam deploy` the stack **`supp-shop`** (first time ≈ 5–10 minutes with CloudFront, ≈ 2–3 minutes without).
+4. Reads the stack outputs and writes `frontend/.env.production`.
+5. Builds the React app, uploads it to the site bucket, invalidates CloudFront (if used), deletes `node_modules` (CloudShell only has ~1 GB).
+6. Seeds the 12 products into DynamoDB (skipped if products already exist).
+7. Prints the **site URL** and next steps.
+
+Without CloudFront (if your lab blocks it):
+```bash
+USE_CLOUDFRONT=false ADMIN_EMAIL=your.name@example.com ./deploy.sh
+```
 
 Optional: change the Gemini model (default `gemini-flash-latest`, an alias for Google's current Flash model):
 ```bash
@@ -175,8 +185,8 @@ You can re-run `./deploy.sh` any time after changing code — it updates the sta
 
 ### 6.5 After the deploy
 1. **Confirm the admin email:** open the "AWS Notification - Subscription Confirmation" email sent to `ADMIN_EMAIL` and click *Confirm subscription*.
-2. **Open the site URL** printed at the end (`https://dxxxxxxxx.cloudfront.net`).
-3. **Create an account:** click `เข้าสู่ระบบ` → *Create an account* → enter email + password → type the code from the verification email.
+2. **Open the site URL** printed at the end (`https://dxxxxxxxx.cloudfront.net`, or `http://<bucket>.s3-website-us-east-1.amazonaws.com` without CloudFront).
+3. **Create an account:** click `เข้าสู่ระบบ` → `สมัครสมาชิก` → enter email + password (at least 8 characters with a lowercase letter and a number) → type the 6-digit code from the verification email → you are signed in.
 4. **Make yourself admin** (the script prints this command with your pool id filled in):
    ```bash
    aws cognito-idp admin-add-user-to-group --region us-east-1 \
@@ -196,7 +206,7 @@ aws cloudformation describe-stacks --stack-name supp-shop --region us-east-1 --q
 | # | Feature | Steps | Expected |
 |---|---|---|---|
 | 1 | Public shop | Open the site without signing in. Use category / price filters, search `คอลลาเจน`, sort by price | Product grid updates; `ไม่พบสินค้าที่ตรงกับตัวกรอง` when nothing matches |
-| 2 | Sign in | Click `+ ตะกร้า` while signed out, or `เข้าสู่ระบบ` | Redirects to Cognito managed login, then back to the site |
+| 2 | Sign up / sign in | Click `+ ตะกร้า` while signed out, or `เข้าสู่ระบบ` → `สมัครสมาชิก`. Try a wrong password and a wrong code too | `/login` → `/signup` → code step → back to the page you came from; Thai error messages for wrong password/code |
 | 3 | Cart | Click `+ ตะกร้า` on a few products | Toast `เพิ่มลงตะกร้าแล้ว`, badge in the navbar increases; `/cart` shows the items, `−`/`+`/`ลบ` work |
 | 4 | Quiz + AI | Go to `วิเคราะห์ไลฟ์สไตล์`, answer the 6 steps, tick consent, click `ส่งให้ AI วิเคราะห์ →` | Loading `AI กำลังวิเคราะห์…`, then the result page with summary, ≤ 3 products, tips |
 | 5 | Safety rule | Retake the quiz and type something in `ยาที่ทานประจำ…` (or choose pregnancy `ใช่`) | Orange banner `ควรปรึกษาแพทย์หรือเภสัชกรก่อนทานอาหารเสริม` |
@@ -204,7 +214,7 @@ aws cloudformation describe-stacks --stack-name supp-shop --region us-east-1 --q
 | 7 | History | `/history` → `รายละเอียด` → `สั่งซื้ออีกครั้ง` | Same items are added to the cart |
 | 8 | Weekly signal opt-in | On `/result` turn on `สัญญาณสุขภาพรายสัปดาห์`, choose a city | Message `กรุณายืนยันอีเมลจาก AWS…`; confirm the AWS email; navbar chip shows `· เปิด` |
 | 9 | Weekly signal email | Section 8 below | Email with PM2.5, a tip and refill reminder |
-| 10 | Admin | Avatar → `จัดการสินค้า (แอดมิน)` → add a product with an image | Product appears in the shop with the uploaded image (served from CloudFront `/images/...`) |
+| 10 | Admin | Avatar → `จัดการสินค้า (แอดมิน)` → add a product with an image | Product appears in the shop with the uploaded image (direct S3 URL `https://<images-bucket>.s3.us-east-1.amazonaws.com/images/...`) |
 | 11 | Low-stock alert | In `/admin` set a product's stock to e.g. `5` → `บันทึก`. Then Lambda console → `supp-shop-LowStockFunction-…` → **Test** with `{}` | Admin email `NutriMate low stock alert` (also arrives automatically every day at 09:00) |
 
 Where to look when something fails: **CloudWatch → Log groups → `/aws/lambda/supp-shop-<Name>Function-…`**.
@@ -241,7 +251,7 @@ out() { aws cloudformation describe-stacks --stack-name supp-shop --region $REGI
 aws s3 rm "s3://$(out SiteBucket)" --recursive
 aws s3 rm "s3://$(out ImagesBucket)" --recursive
 
-# 2. Delete the stack (CloudFront takes a few minutes)
+# 2. Delete the stack (takes a few minutes if CloudFront is used)
 sam delete --stack-name supp-shop --region $REGION --no-prompts
 
 # 3. Delete the API keys
@@ -260,7 +270,7 @@ For a class demo this should cost **≈ $0** — almost everything is inside the
 |---|---|
 | Lambda, API Gateway HTTP API | Free tier: 1M requests/month each (API GW free for 12 months), then ~$1 per million |
 | DynamoDB on-demand | Pay per request; a demo is a few cents at most. 25 GB storage free |
-| S3 + CloudFront | A few MB of files; CloudFront always-free tier is 1 TB transfer/month |
+| S3 + CloudFront | A few MB of files; S3 website requests cost fractions of a cent; CloudFront always-free tier is 1 TB transfer/month |
 | Cognito (Essentials) | Free up to 10,000 monthly active users |
 | SNS | First 1,000 email notifications/month free |
 | EventBridge scheduled rules | Free (scheduled events are not charged) |
@@ -282,7 +292,7 @@ npm run dev:mock          # same as: VITE_USE_MOCK=true npm run dev
 Open <http://localhost:5173>. A mock signed-in admin user, the 12 products, a 2-item cart, 3 past orders and the sample AI plan from the design files are loaded in memory (reset on reload). The quiz returns a rule-based "mock AI" plan.
 
 ### Against the deployed backend
-After a deploy, copy `frontend/.env.production` to `frontend/.env.local` and run `npm run dev`. `http://localhost:5173/` is already allowed as a Cognito callback URL and in API CORS.
+After a deploy, copy `frontend/.env.production` to `frontend/.env.local` and run `npm run dev`. `http://localhost:5173` is already allowed in API CORS, and sign-in works locally because it uses the in-app login pages.
 
 ### Backend checks
 ```bash
@@ -301,10 +311,10 @@ sam validate --lint    # template validation (in CloudShell)
 ├─ design/app/*.dc.html      UI mockups (reference only, not deployed)
 ├─ frontend/                 React 18 + Vite + TypeScript + Tailwind + React Router + Amplify v6 (Auth)
 │  └─ src/
-│     ├─ pages/              Shop, Quiz, Result, Cart, History, Admin
+│     ├─ pages/              Shop, Quiz, Result, Cart, History, Admin, Login, Signup
 │     ├─ components/         Navbar, ProductCard, ProductImage, Icons, ui (PageHeader, pills, toast…)
 │     ├─ api/                types, http client (real), mock implementation
-│     ├─ auth/               Cognito managed login (signInWithRedirect, code flow)
+│     ├─ auth/               Amplify signUp / confirmSignUp / signIn / signOut (no hosted UI)
 │     ├─ state/              cart / settings / products store
 │     └─ mock/               mock data (same as the design files)
 └─ backend/
@@ -331,14 +341,15 @@ sam validate --lint    # template validation (in CloudShell)
 
 ## 13. Design decisions and notes
 
-- **No IAM resources in the template** (Learner Lab rule): every Lambda sets `Role: arn:aws:iam::${AWS::AccountId}:role/LabRole`; schedules are plain `AWS::Events::Rule`s that invoke Lambda through `AWS::Lambda::Permission` (resource-based, no role); API Gateway invokes Lambda the same way; CloudFront reads S3 through bucket policies (OAC). Trade-off: LabRole is broad, so the functions are not least-privilege.
-- **Cognito managed login (v2)** with Cognito's default branding (`AWS::Cognito::ManagedLoginBranding`, `UseCognitoProvidedValues`). The domain prefix is `nutrimate-<account id>` so it is unique per account. Cognito's built-in email sender is limited to ~50 emails/day — fine for a demo.
+- **No IAM resources in the template** (Learner Lab rule): every Lambda sets `Role: arn:aws:iam::${AWS::AccountId}:role/LabRole`; schedules are plain `AWS::Events::Rule`s that invoke Lambda through `AWS::Lambda::Permission` (resource-based, no role); API Gateway invokes Lambda the same way. Trade-off: LabRole is broad, so the functions are not least-privilege.
+- **Public S3 website instead of OAC** (Learner Lab denies `cloudfront:CreateOriginAccessControl`): the site bucket has static website hosting (`IndexDocument`/`ErrorDocument` = `index.html`), Block Public Access off and a public `s3:GetObject` bucket policy. CloudFront (optional, `UseCloudFront` parameter) points at the **website endpoint** as an HTTP-only custom origin and adds HTTPS + the SPA fallback. Only build output (HTML/JS/CSS) is in this bucket, so public read is fine.
+- **In-app login instead of the Cognito hosted UI**: `/login` and `/signup` call Amplify v6 `signUp`, `confirmSignUp`, `signIn` and `signOut`. The app client allows `USER_PASSWORD_AUTH`, which needs no browser crypto, so sign-in works on the http S3 website URL too; the password always travels over HTTPS to the Cognito API. Cognito's built-in email sender is limited to ~50 emails/day — fine for a demo.
 - The SPA sends the Cognito **ID token** (it carries `email` and `cognito:groups`); the HTTP API JWT authorizer checks issuer + audience (app client id). Admin checks are done in the Lambda.
 - **Cart** = the Orders item with `orderId = "CART"`. **Order numbers** come from an atomic counter item (`userId = "#COUNTER"`) in the Orders table. Placing an order is a DynamoDB transaction (save order + reduce stock with `stock >= qty` condition + delete cart).
 - **AI safety rules are enforced in code** (`backend/src/lib/planner.mjs`): answers are whitelisted, unknown `productId`s are dropped, max 3 items, `needsDoctor` forced when medication/conditions text is filled or pregnancy = `ใช่`; invalid JSON → 1 retry → rule-based plan (goal → category).
 - **OpenAQ**: per city we look up stations measuring PM2.5 within 25 km of the city centre (`/v3/locations`) and read the nearest station with a reading from the last 3 days (`/v3/locations/{id}/latest`). This happens **once per distinct city per run** and is cached for the run. No recent data → the email says so.
 - **SNS per-user emails**: every user's email subscription to `supp-wellness-signal` has the filter policy `{"userId":["<sub>"]}` and each published message carries a `userId` attribute, so each user only receives their own note. Emails end with the AI disclaimer and how to turn the email off.
-- **Images bucket CORS** allows `PUT` from any origin (`*`) to avoid a circular dependency between the bucket and the CloudFront domain; uploads still require a 5-minute presigned URL issued only to admins.
+- **Product images** are public-read objects in the images bucket, served by their direct S3 URL (`https://<bucket>.s3.us-east-1.amazonaws.com/images/products/<uuid>.<ext>`). Bucket CORS allows `PUT` from any origin so the admin page works on CloudFront, the S3 website URL and localhost; uploads still need a 5-minute presigned URL issued only to admins.
 - **Gemini model** is the template parameter `GeminiModel` (default `gemini-flash-latest`). Change it with `GEMINI_MODEL=... ./deploy.sh` if Google renames models.
 - The Lambdas use the AWS SDK v3 that ships with the Node.js 22 runtime; only the S3 client + presigner are bundled (for presigned uploads).
 - UI behaviour choices not fixed by the mockups: the quiz starts at step 1 and is pre-filled from your latest plan; the newest order row in History starts expanded (as in the mockup); `ดูรายละเอียดสินค้า` opens the shop filtered to that product; `สั่งซื้ออีกครั้ง` adds the items and opens the cart; the Admin page also lets admins edit stock inline (handy for the low-stock demo).
@@ -348,7 +359,11 @@ sam validate --lint    # template validation (in CloudShell)
 | Problem | Fix |
 |---|---|
 | `deploy.sh: /usr/bin/env: 'bash\r'` | The file got Windows line endings: `sed -i 's/\r$//' deploy.sh` |
-| `redirect_mismatch` on login | You opened the site on a URL that is not the CloudFront URL or `http://localhost:5173` |
+| Deploy fails on `CreateOriginAccessControl` or `ManagedLoginBranding` | You are using an old template — pull the latest code (it creates neither) |
+| Deploy fails on CloudFront (`AccessDenied` for `cloudfront:*`) | Re-run with `USE_CLOUDFRONT=false`; `deploy.sh` deletes a `ROLLBACK_COMPLETE` stack automatically first |
+| Bucket policy fails with `AccessDenied` / "public policies are blocked" | The account-level S3 Block Public Access is on. Turn it off for the account (S3 console → *Block Public Access settings for this account*) if your lab allows it, or ask your instructor |
+| Sign-up email (verification code) never arrives | Check spam; Cognito's default sender allows ~50 emails/day. In the Cognito console you can also confirm the user manually (*Users → user → Confirm account*) |
+| API calls fail with a CORS error | You opened the site on a URL other than the `SiteUrl` output or `http://localhost:5173` (API CORS allows only those) |
 | Quiz always returns a generic plan | Check the QuizFunction logs: wrong Gemini key (`HTTP 400/403`) or model name (`HTTP 404`) — fix the key in SSM or redeploy with `GEMINI_MODEL=...` |
 | No weekly email | The SNS subscription is still *pending confirmation*; check spam and click the AWS confirm link |
 | Weekly email says no PM2.5 data | OpenAQ had no fresh reading near that city (or the key is wrong — see WeeklySignalFunction logs) |

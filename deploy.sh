@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # One-command deploy for NutriMate. Run from the repo root in AWS CloudShell (us-east-1):
 #   ADMIN_EMAIL=you@example.com ./deploy.sh
-# Optional: GEMINI_MODEL=gemini-2.5-flash ./deploy.sh   (overrides the template default)
+# Optional:
+#   USE_CLOUDFRONT=false ./deploy.sh        # no CloudFront; site served from the S3 website URL (http)
+#   GEMINI_MODEL=gemini-2.5-flash ./deploy.sh
 set -euo pipefail
 
 STACK=supp-shop
@@ -12,8 +14,14 @@ cd "$ROOT"
 
 step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 
+USE_CLOUDFRONT="${USE_CLOUDFRONT:-true}"
+case "$USE_CLOUDFRONT" in
+  true | false) ;;
+  *) echo "USE_CLOUDFRONT must be true or false (got '$USE_CLOUDFRONT')"; exit 1 ;;
+esac
+
 # ---------------------------------------------------------------- 1. API keys in SSM
-step "1/6 Checking API keys in SSM Parameter Store"
+step "1/7 Checking API keys in SSM Parameter Store"
 missing=0
 for name in /supp/gemini-api-key /supp/openaq-api-key; do
   if aws ssm get-parameter --name "$name" --query Parameter.Name --output text >/dev/null 2>&1; then
@@ -38,16 +46,42 @@ EOF
   exit 1
 fi
 
-# ---------------------------------------------------------------- 2. Backend (SAM)
+# ---------------------------------------------------------------- 2. Clean up a failed first deploy
+# A stack in ROLLBACK_COMPLETE (first create failed) cannot be updated; it must be deleted first.
+step "2/7 Checking existing stack '$STACK'"
+STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo NONE)
+echo "  status: $STATUS"
+if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+  echo "  Previous create failed — deleting the stack before deploying again"
+  # Buckets left behind must be empty or the delete fails
+  for b in $(aws cloudformation list-stack-resources --stack-name "$STACK" \
+      --query "StackResourceSummaries[?ResourceType=='AWS::S3::Bucket' && PhysicalResourceId!=null].PhysicalResourceId" \
+      --output text 2>/dev/null); do
+    if aws s3api head-bucket --bucket "$b" >/dev/null 2>&1; then
+      echo "  emptying s3://$b"
+      aws s3 rm "s3://$b" --recursive >/dev/null
+    fi
+  done
+  aws cloudformation delete-stack --stack-name "$STACK"
+  echo "  waiting for the stack to be deleted…"
+  aws cloudformation wait stack-delete-complete --stack-name "$STACK"
+  echo "  deleted"
+fi
+
+# ---------------------------------------------------------------- 3. Backend (SAM)
 if [ -z "${ADMIN_EMAIL:-}" ]; then
   read -r -p "Admin email for low-stock alerts: " ADMIN_EMAIL
 fi
 [ -n "$ADMIN_EMAIL" ] || { echo "ADMIN_EMAIL is required"; exit 1; }
 
-OVERRIDES="AdminEmail=$ADMIN_EMAIL"
+OVERRIDES="AdminEmail=$ADMIN_EMAIL UseCloudFront=$USE_CLOUDFRONT"
 if [ -n "${GEMINI_MODEL:-}" ]; then OVERRIDES="$OVERRIDES GeminiModel=$GEMINI_MODEL"; fi
 
-step "2/6 Building and deploying backend stack '$STACK' (first run takes ~5-10 min for CloudFront)"
+if [ "$USE_CLOUDFRONT" = true ]; then
+  step "3/7 Deploying backend stack '$STACK' with CloudFront (first run takes ~5-10 min)"
+else
+  step "3/7 Deploying backend stack '$STACK' without CloudFront"
+fi
 (
   cd backend
   sam build
@@ -62,8 +96,8 @@ step "2/6 Building and deploying backend stack '$STACK' (first run takes ~5-10 m
   rm -rf .aws-sam # free CloudShell storage
 )
 
-# ---------------------------------------------------------------- 3. Stack outputs -> frontend env
-step "3/6 Reading stack outputs"
+# ---------------------------------------------------------------- 4. Stack outputs -> frontend env
+step "4/7 Reading stack outputs"
 out() {
   aws cloudformation describe-stacks --stack-name "$STACK" \
     --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
@@ -71,7 +105,6 @@ out() {
 API_URL=$(out ApiUrl)
 USER_POOL_ID=$(out UserPoolId)
 CLIENT_ID=$(out UserPoolClientId)
-COGNITO_DOMAIN=$(out CognitoDomain)
 SITE_URL=$(out SiteUrl)
 SITE_BUCKET=$(out SiteBucket)
 DIST_ID=$(out DistributionId)
@@ -81,14 +114,13 @@ cat > frontend/.env.production <<EOF
 VITE_API_URL=$API_URL
 VITE_USER_POOL_ID=$USER_POOL_ID
 VITE_USER_POOL_CLIENT_ID=$CLIENT_ID
-VITE_COGNITO_DOMAIN=$COGNITO_DOMAIN
 VITE_SITE_URL=$SITE_URL
 VITE_USE_MOCK=false
 EOF
 echo "  wrote frontend/.env.production"
 
-# ---------------------------------------------------------------- 4. Frontend build + upload
-step "4/6 Building frontend and uploading to S3"
+# ---------------------------------------------------------------- 5. Frontend build + upload
+step "5/7 Building frontend and uploading to S3"
 (
   cd frontend
   npm ci --no-audit --no-fund
@@ -98,13 +130,15 @@ step "4/6 Building frontend and uploading to S3"
     --cache-control "public,max-age=31536000,immutable"
   aws s3 cp dist/index.html "s3://$SITE_BUCKET/index.html" \
     --cache-control "no-cache" --content-type "text/html; charset=utf-8"
-  aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" \
-    --query Invalidation.Id --output text
+  if [ "$DIST_ID" != "none" ]; then
+    aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" \
+      --query Invalidation.Id --output text
+  fi
   rm -rf node_modules # CloudShell has ~1 GB home storage
 )
 
-# ---------------------------------------------------------------- 5. Seed products (once)
-step "5/6 Seeding products (skipped if the table already has items)"
+# ---------------------------------------------------------------- 6. Seed products (once)
+step "6/7 Seeding products (skipped if the table already has items)"
 (
   cd backend
   npm ci --omit=dev --no-audit --no-fund
@@ -112,8 +146,8 @@ step "5/6 Seeding products (skipped if the table already has items)"
   rm -rf node_modules
 )
 
-# ---------------------------------------------------------------- 6. Done
-step "6/6 Done"
+# ---------------------------------------------------------------- 7. Done
+step "7/7 Done"
 cat <<EOF
 
   Site URL:  $SITE_URL
@@ -122,12 +156,13 @@ cat <<EOF
 Next steps:
   1. Check $ADMIN_EMAIL for "AWS Notification - Subscription Confirmation" and click
      "Confirm subscription" (needed for low-stock alerts).
-  2. Open $SITE_URL, click "เข้าสู่ระบบ" and create an account (verify the email code).
+  2. Open $SITE_URL, click "เข้าสู่ระบบ" > "สมัครสมาชิก", sign up with email + password
+     and type the 6-digit code from the verification email.
   3. Make yourself an admin (then sign out and in again):
        aws cognito-idp admin-add-user-to-group --region $REGION \\
          --user-pool-id $USER_POOL_ID --group-name admin --username <your-email>
   4. Turn on "สัญญาณสุขภาพรายสัปดาห์" on the result page and confirm the AWS email.
   5. Test the weekly job now: Lambda console > ${STACK}-WeeklySignalFunction-* > Test (event {}).
 
-If the site shows an old version, wait 1-2 minutes for the CloudFront invalidation.
+If the site shows an old version, wait 1-2 minutes (CloudFront invalidation).
 EOF

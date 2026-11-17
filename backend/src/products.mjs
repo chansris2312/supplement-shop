@@ -65,7 +65,7 @@ async function save(event) {
 
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 
-/** Presigned PUT URL. Objects live under images/ so CloudFront serves them at /images/*. */
+/** Presigned PUT URL. The images bucket is public-read, so imageUrl is the direct S3 object URL. */
 async function upload(event) {
   if (!isAdmin(event)) return forbidden();
   const { contentType } = parseBody(event);
@@ -78,7 +78,7 @@ async function upload(event) {
     new PutObjectCommand({ Bucket: process.env.IMAGES_BUCKET, Key: key, ContentType: contentType }),
     { expiresIn: 300 },
   );
-  return ok({ uploadUrl, imageUrl: `${process.env.SITE_URL}/${key}` });
+  return ok({ uploadUrl, imageUrl: `${process.env.IMAGES_BASE_URL}/${key}` });
 }
 
 const routes = {

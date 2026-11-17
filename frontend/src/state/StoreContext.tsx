@@ -22,7 +22,7 @@ interface Store {
 const StoreContext = createContext<Store>(null as unknown as Store);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { user, signIn } = useAuth();
+  const { user, requireLogin } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [me, setMe] = useState<Me | null>(null);
@@ -69,7 +69,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const addToCart = useCallback(
     (items: CartItem[], toastMsg = 'เพิ่มลงตะกร้าแล้ว') => {
-      if (!user) return signIn();
+      if (!user) return requireLogin();
       const next = cart.map((c) => ({ ...c }));
       for (const it of items) {
         const found = next.find((c) => c.productId === it.productId);
@@ -79,7 +79,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit(next);
       showToast(toastMsg);
     },
-    [user, signIn, cart, commit, showToast],
+    [user, requireLogin, cart, commit, showToast],
   );
 
   const setQty = useCallback(
