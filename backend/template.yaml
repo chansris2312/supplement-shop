@@ -1,0 +1,460 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  NutriMate - AI supplement shop. S3 + CloudFront site, Cognito managed login, HTTP API + Lambda,
+  DynamoDB, EventBridge Scheduler, SNS and SSM Parameter Store (Gemini + OpenAQ keys).
+
+Parameters:
+  AdminEmail:
+    Type: String
+    Description: Email that receives low-stock alerts (confirm the SNS email after deploy).
+    AllowedPattern: '^[^@\s]+@[^@\s]+\.[^@\s]+$'
+  GeminiModel:
+    Type: String
+    Default: gemini-flash-latest
+    Description: Gemini model id used by the planner and the weekly signal (e.g. gemini-flash-latest, gemini-2.5-flash).
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    CodeUri: src/
+    MemorySize: 256
+    Timeout: 10
+    Environment:
+      Variables:
+        PRODUCTS_TABLE: !Ref ProductsTable
+        USERS_TABLE: !Ref UsersTable
+        PLANS_TABLE: !Ref PlansTable
+        ORDERS_TABLE: !Ref OrdersTable
+        SITE_URL: !Sub https://${Distribution.DomainName}
+        GEMINI_MODEL: !Ref GeminiModel
+        GEMINI_KEY_PARAM: /supp/gemini-api-key
+        OPENAQ_KEY_PARAM: /supp/openaq-api-key
+
+Resources:
+  # ---------------------------------------------------------------- S3 + CloudFront
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+
+  ImagesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      # Browser uploads with presigned PUT URLs. Origin "*" avoids a circular
+      # dependency on the CloudFront domain; the presigned URL itself is the access control.
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT]
+            AllowedOrigins: ['*']
+            AllowedHeaders: ['*']
+            MaxAge: 3000
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub ${AWS::StackName}-oac
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: NutriMate site + product images
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        PriceClass: PriceClass_200
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+          - Id: images
+            DomainName: !GetAtt ImagesBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          Compress: true
+        CacheBehaviors:
+          - PathPattern: images/*
+            TargetOriginId: images
+            ViewerProtocolPolicy: redirect-to-https
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            Compress: true
+        # SPA fallback: unknown paths (e.g. /cart) return index.html with 200
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  ImagesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ImagesBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub ${ImagesBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}
+
+  # ---------------------------------------------------------------- Cognito
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub ${AWS::StackName}-users
+      UsernameAttributes: [email]
+      AutoVerifiedAttributes: [email]
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: true
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: false
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: nutrimate-web
+      GenerateSecret: false
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows: [code]
+      AllowedOAuthScopes: [openid, email, profile]
+      SupportedIdentityProviders: [COGNITO]
+      ExplicitAuthFlows: [ALLOW_USER_SRP_AUTH, ALLOW_REFRESH_TOKEN_AUTH]
+      PreventUserExistenceErrors: ENABLED
+      CallbackURLs:
+        - !Sub https://${Distribution.DomainName}/
+        - http://localhost:5173/
+      LogoutURLs:
+        - !Sub https://${Distribution.DomainName}/
+        - http://localhost:5173/
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      Domain: !Sub nutrimate-${AWS::AccountId}
+      ManagedLoginVersion: 2
+
+  # Managed login (v2) needs a branding style for the app client; use Cognito's default look.
+  ManagedLoginBranding:
+    Type: AWS::Cognito::ManagedLoginBranding
+    DependsOn: UserPoolDomain
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientId: !Ref UserPoolClient
+      UseCognitoProvidedValues: true
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      UserPoolId: !Ref UserPool
+      GroupName: admin
+      Description: Can add products, upload images and edit stock
+
+  # ---------------------------------------------------------------- DynamoDB
+  ProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: productId, AttributeType: S }
+      KeySchema:
+        - { AttributeName: productId, KeyType: HASH }
+
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: userId, AttributeType: S }
+      KeySchema:
+        - { AttributeName: userId, KeyType: HASH }
+
+  PlansTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: userId, AttributeType: S }
+        - { AttributeName: createdAt, AttributeType: S }
+      KeySchema:
+        - { AttributeName: userId, KeyType: HASH }
+        - { AttributeName: createdAt, KeyType: RANGE }
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: userId, AttributeType: S }
+        - { AttributeName: orderId, AttributeType: S }
+      KeySchema:
+        - { AttributeName: userId, KeyType: HASH }
+        - { AttributeName: orderId, KeyType: RANGE }
+
+  # ---------------------------------------------------------------- SNS
+  SignalTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: supp-wellness-signal
+      DisplayName: NutriMate
+
+  AdminTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: supp-admin-alerts
+      DisplayName: NutriMate Admin
+      Subscription:
+        - Protocol: email
+          Endpoint: !Ref AdminEmail
+
+  # ---------------------------------------------------------------- HTTP API
+  Api:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowOrigins:
+          - !Sub https://${Distribution.DomainName}
+          - http://localhost:5173
+        AllowHeaders: [authorization, content-type]
+        AllowMethods: [GET, PUT, POST, OPTIONS]
+        MaxAge: 600
+      Auth:
+        DefaultAuthorizer: CognitoJwt
+        Authorizers:
+          CognitoJwt:
+            IdentitySource: $request.header.Authorization
+            JwtConfiguration:
+              issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}
+              audience:
+                - !Ref UserPoolClient
+
+  # ---------------------------------------------------------------- Lambda functions
+  ProductsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: products.handler
+      Description: Product list/detail, admin add/edit, presigned image upload
+      Environment:
+        Variables:
+          IMAGES_BUCKET: !Ref ImagesBucket
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref ProductsTable }
+        - S3WritePolicy: { BucketName: !Ref ImagesBucket }
+      Events:
+        List:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/products, Method: GET, Auth: { Authorizer: NONE } }
+        Get:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: '/api/products/{id}', Method: GET, Auth: { Authorizer: NONE } }
+        Create:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/products, Method: POST }
+        Upload:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/uploads, Method: POST }
+
+  CartFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: cart.handler
+      Description: Read / replace the cart
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref OrdersTable }
+        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
+      Events:
+        Get:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/cart, Method: GET }
+        Put:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/cart, Method: PUT }
+
+  OrdersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: orders.handler
+      Description: Cart to order (reduces stock), list my orders
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref OrdersTable }
+        - DynamoDBCrudPolicy: { TableName: !Ref ProductsTable }
+      Events:
+        Create:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/orders, Method: POST }
+        List:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/orders, Method: GET }
+
+  QuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: quiz.handler
+      Description: Lifestyle quiz -> Gemini plan; latest plan
+      Timeout: 29
+      MemorySize: 512
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref PlansTable }
+        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
+        - SSMParameterReadPolicy: { ParameterName: supp/gemini-api-key }
+      Events:
+        Submit:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/quiz, Method: POST }
+        Latest:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/plans/latest, Method: GET }
+
+  MeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: me.handler
+      Description: City + weekly signal opt-in (SNS subscribe/unsubscribe)
+      Environment:
+        Variables:
+          SIGNAL_TOPIC_ARN: !Ref SignalTopic
+      Policies:
+        - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
+        - Statement:
+            - Effect: Allow
+              Action: [sns:Subscribe, sns:Unsubscribe]
+              Resource:
+                - !Ref SignalTopic
+                - !Sub ${SignalTopic}:*
+      Events:
+        Get:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/me, Method: GET }
+        Put:
+          Type: HttpApi
+          Properties: { ApiId: !Ref Api, Path: /api/me, Method: PUT }
+
+  WeeklySignalFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: weeklySignal.handler
+      Description: Monday 08:00 Bangkok - PM2.5 + Gemini note -> SNS email per user
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          SIGNAL_TOPIC_ARN: !Ref SignalTopic
+      Policies:
+        - DynamoDBReadPolicy: { TableName: !Ref UsersTable }
+        - DynamoDBReadPolicy: { TableName: !Ref PlansTable }
+        - DynamoDBReadPolicy: { TableName: !Ref OrdersTable }
+        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
+        - SSMParameterReadPolicy: { ParameterName: supp/gemini-api-key }
+        - SSMParameterReadPolicy: { ParameterName: supp/openaq-api-key }
+        - SNSPublishMessagePolicy: { TopicName: !GetAtt SignalTopic.TopicName }
+      Events:
+        Weekly:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub ${AWS::StackName}-weekly-signal
+            ScheduleExpression: cron(0 8 ? * MON *)
+            ScheduleExpressionTimezone: Asia/Bangkok
+            Description: Wellness Signal email every Monday 08:00 Asia/Bangkok
+
+  LowStockFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: lowStock.handler
+      Description: Daily email to admin when a product's stock is below 10
+      Environment:
+        Variables:
+          ADMIN_TOPIC_ARN: !Ref AdminTopic
+      Policies:
+        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
+        - SNSPublishMessagePolicy: { TopicName: !GetAtt AdminTopic.TopicName }
+      Events:
+        Daily:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub ${AWS::StackName}-low-stock
+            ScheduleExpression: cron(0 9 * * ? *)
+            ScheduleExpressionTimezone: Asia/Bangkok
+            Description: Daily low-stock check 09:00 Asia/Bangkok
+
+Outputs:
+  ApiUrl:
+    Description: HTTP API base URL (frontend calls ApiUrl + /api/...)
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com
+  UserPoolId:
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Value: !Ref UserPoolClient
+  CognitoDomain:
+    Description: Managed login domain (no https://)
+    Value: !Sub ${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com
+  SiteBucket:
+    Value: !Ref SiteBucket
+  ImagesBucket:
+    Value: !Ref ImagesBucket
+  DistributionId:
+    Value: !Ref Distribution
+  SiteUrl:
+    Value: !Sub https://${Distribution.DomainName}
+  ProductsTable:
+    Description: Used by scripts/seed.mjs
+    Value: !Ref ProductsTable
