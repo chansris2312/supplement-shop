@@ -1,0 +1,334 @@
+# NutriMate — AI Supplement Shop on AWS
+
+A full-stack supplement e-commerce site (Thai UI) built for a university AWS group project.
+This README is a **step-by-step guide that another student group can follow from zero** to deploy and test the app.
+
+---
+
+## 1. What the app does
+
+| Feature | What the user sees |
+|---|---|
+| **Shop** (`/`) | 12 supplements with category / price filters, search, sorting, `+ ตะกร้า` |
+| **Lifestyle quiz** (`/quiz`) | 6-step questionnaire (body, sleep, work, food, exercise/stress, goals & health) |
+| **AI result** (`/result`) | **Google Gemini** writes a lifestyle summary, recommends up to 3 products from the shop with *why* and *how to take*, plus 3 lifestyle tips. Shows a "see a doctor first" banner when needed |
+| **Cart → Order → History** | Cart stored per user, simulated checkout (shipping ฿40), order numbers `#NM-0001…`, stock is reduced, re-order button |
+| **Wellness Signal** (weekly email) | Every **Monday 08:00 (Bangkok)** an automated job reads the latest **PM2.5** for the user's city (**OpenAQ API**), asks Gemini for a 3-line note (air quality, one tip, refill reminder if the last order was > 25 days ago) and emails it via **SNS** |
+| **Low-stock alert** | Every day 09:00 an email to the admin lists products with stock < 10 |
+| **Admin** (`/admin`) | Add products, upload product images (presigned S3 URL), edit stock — only for the Cognito `admin` group |
+
+Privacy: the AI only receives the questionnaire answers and the product list — **never the name, email or user id**. API keys are kept in SSM Parameter Store and read at runtime; they are never in code, env files or Git.
+
+---
+
+## 2. Architecture
+
+```mermaid
+flowchart LR
+  U[Browser<br/>React SPA] -->|HTTPS| CF[Amazon CloudFront]
+  CF -->|OAC| S3S[(S3 site bucket)]
+  CF -->|/images/* OAC| S3I[(S3 images bucket)]
+  U -->|Sign in / sign up| COG[Amazon Cognito<br/>managed login]
+  U -->|JWT /api/*| API[API Gateway<br/>HTTP API]
+  API -->|JWT authorizer| COG
+  API --> LP[Lambda products]
+  API --> LC[Lambda cart]
+  API --> LO[Lambda orders]
+  API --> LQ[Lambda quiz]
+  API --> LM[Lambda me]
+  LP -->|presigned PUT| S3I
+  LP & LC & LO & LQ & LM --> DDB[(DynamoDB<br/>Products · Users · Plans · Orders)]
+  LQ -->|GetParameter| SSM[SSM Parameter Store<br/>SecureString keys]
+  LQ -->|generateContent| GEM[[Gemini API]]
+  LM -->|Subscribe / Unsubscribe| SNS1[SNS supp-wellness-signal]
+  SCH[EventBridge Scheduler<br/>Mon 08:00 · daily 09:00] --> LW[Lambda weeklySignal]
+  SCH --> LS[Lambda lowStock]
+  LW --> DDB
+  LW --> SSM
+  LW -->|PM2.5| AQ[[OpenAQ API v3]]
+  LW --> GEM
+  LW -->|userId attribute| SNS1
+  LS --> DDB
+  LS --> SNS2[SNS supp-admin-alerts]
+  SNS1 -->|filter policy userId| MAIL1[User email]
+  SNS2 --> MAIL2[Admin email]
+```
+
+Everything is defined in one AWS SAM template: [`backend/template.yaml`](backend/template.yaml). Region: **ap-southeast-1 (Singapore)**.
+
+---
+
+## 3. AWS services used (counted for the assessment)
+
+| # | Service | Used for |
+|---|---|---|
+| 1 | **Amazon S3** | Private bucket for the website files, private bucket for product images |
+| 2 | **Amazon CloudFront** | HTTPS, serves the SPA (403/404 → `index.html`) and `/images/*` via Origin Access Control |
+| 3 | **Amazon Cognito** | User pool (email sign-in), managed login pages, `admin` group |
+| 4 | **Amazon API Gateway (HTTP API)** | `/api/*` routes, JWT authorizer, CORS |
+| 5 | **AWS Lambda** | 7 Node.js 22 functions: products, cart, orders, quiz, me, weeklySignal, lowStock |
+| 6 | **Amazon DynamoDB** | 4 on-demand tables: Products, Users, Plans, Orders |
+| 7 | **Amazon EventBridge Scheduler** | `cron(0 8 ? * MON *)` Asia/Bangkok → weeklySignal; `cron(0 9 * * ? *)` → lowStock |
+| 8 | **Amazon SNS** | `supp-wellness-signal` (per-user email subscriptions with filter policy), `supp-admin-alerts` |
+| 9 | **AWS Systems Manager Parameter Store** | `/supp/gemini-api-key`, `/supp/openaq-api-key` (SecureString) |
+
+Not counted but used: IAM (least-privilege roles via SAM policy templates), CloudWatch Logs (every Lambda), CloudFormation (via SAM).
+External APIs: **Google Gemini API** (AI) and **OpenAQ API v3** (PM2.5).
+
+**Level 4 (automated + integrated):** the Wellness Signal runs on a schedule with no human action and chains Scheduler → Lambda → DynamoDB → OpenAQ → Gemini → SNS → email.
+
+---
+
+## 4. Prerequisites
+
+1. **An AWS account** you can sign in to (AWS Academy Learner Lab may not allow Cognito/CloudFront — a normal account is recommended). Use an IAM user/role with admin rights for the deploy.
+2. **A Gemini API key** — go to <https://aistudio.google.com/app/apikey> → *Create API key*. (Free tier is enough for a demo. Note: on the free tier Google may use prompts to improve its products — we only send anonymous quiz answers.)
+3. **An OpenAQ API key** — create a free account at <https://explore.openaq.org/register>, then copy the key from your account settings page.
+4. **An email address** for admin alerts (you must be able to click the confirmation email).
+5. The code in a Git repository (fork/clone this repo), or as a zip file.
+
+You do **not** need anything installed on your own computer — everything runs in **AWS CloudShell**, which already has the AWS CLI, SAM CLI, Node.js, npm and git.
+
+---
+
+## 5. Deploy step by step (AWS CloudShell)
+
+### 5.1 Open CloudShell in the right region
+1. Sign in to the AWS Console.
+2. Top-right region selector → **Asia Pacific (Singapore) ap-southeast-1**.
+3. Click the CloudShell icon (`>_`) in the top bar and wait for the prompt.
+
+Check the tools (Node.js must be 20 or newer):
+```bash
+aws --version
+sam --version
+node -v
+```
+
+### 5.2 Get the code into CloudShell
+Either clone your repository:
+```bash
+git clone https://github.com/<your-team>/<your-repo>.git supp-shop
+cd supp-shop
+```
+or upload a zip (CloudShell **Actions → Upload file**) and:
+```bash
+unzip supp-shop.zip -d supp-shop && cd supp-shop
+```
+Make the script executable:
+```bash
+chmod +x deploy.sh
+```
+
+### 5.3 Store the API keys in SSM Parameter Store (once)
+`read -s` hides the key while you paste it and keeps it out of the shell history:
+```bash
+read -s -p "Gemini API key: " KEY && echo && \
+aws ssm put-parameter --name /supp/gemini-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+
+read -s -p "OpenAQ API key: " KEY && echo && \
+aws ssm put-parameter --name /supp/openaq-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+```
+Check (shows names only, not values):
+```bash
+aws ssm describe-parameters --region ap-southeast-1 --query "Parameters[?starts_with(Name,'/supp/')].Name"
+```
+
+### 5.4 Deploy everything with one command
+```bash
+ADMIN_EMAIL=your.name@example.com ./deploy.sh
+```
+What the script does:
+1. Checks both SSM parameters exist (if not, prints the exact `put-parameter` commands and stops).
+2. `sam build` + `sam deploy` the stack **`supp-shop`** (first time ≈ 5–10 minutes, mostly CloudFront).
+3. Reads the stack outputs and writes `frontend/.env.production`.
+4. Builds the React app, uploads it to the site bucket, invalidates CloudFront, deletes `node_modules` (CloudShell only has ~1 GB).
+5. Seeds the 12 products into DynamoDB (skipped if products already exist).
+6. Prints the **site URL** and next steps.
+
+Optional: change the Gemini model (default `gemini-flash-latest`, an alias for Google's current Flash model):
+```bash
+GEMINI_MODEL=gemini-2.5-flash ADMIN_EMAIL=your.name@example.com ./deploy.sh
+```
+You can re-run `./deploy.sh` any time after changing code — it updates the stack and re-uploads the site.
+
+### 5.5 After the deploy
+1. **Confirm the admin email:** open the "AWS Notification - Subscription Confirmation" email sent to `ADMIN_EMAIL` and click *Confirm subscription*.
+2. **Open the site URL** printed at the end (`https://dxxxxxxxx.cloudfront.net`).
+3. **Create an account:** click `เข้าสู่ระบบ` → *Create an account* → enter email + password → type the code from the verification email.
+4. **Make yourself admin** (the script prints this command with your pool id filled in):
+   ```bash
+   aws cognito-idp admin-add-user-to-group --region ap-southeast-1 \
+     --user-pool-id <UserPoolId> --group-name admin --username <your-email>
+   ```
+   Sign out and sign in again so the new group is in your token. The avatar menu now shows `จัดการสินค้า (แอดมิน)`.
+
+To see all outputs again:
+```bash
+aws cloudformation describe-stacks --stack-name supp-shop --region ap-southeast-1 --query "Stacks[0].Outputs" --output table
+```
+
+---
+
+## 6. How to test each feature
+
+| # | Feature | Steps | Expected |
+|---|---|---|---|
+| 1 | Public shop | Open the site without signing in. Use category / price filters, search `คอลลาเจน`, sort by price | Product grid updates; `ไม่พบสินค้าที่ตรงกับตัวกรอง` when nothing matches |
+| 2 | Sign in | Click `+ ตะกร้า` while signed out, or `เข้าสู่ระบบ` | Redirects to Cognito managed login, then back to the site |
+| 3 | Cart | Click `+ ตะกร้า` on a few products | Toast `เพิ่มลงตะกร้าแล้ว`, badge in the navbar increases; `/cart` shows the items, `−`/`+`/`ลบ` work |
+| 4 | Quiz + AI | Go to `วิเคราะห์ไลฟ์สไตล์`, answer the 6 steps, tick consent, click `ส่งให้ AI วิเคราะห์ →` | Loading `AI กำลังวิเคราะห์…`, then the result page with summary, ≤ 3 products, tips |
+| 5 | Safety rule | Retake the quiz and type something in `ยาที่ทานประจำ…` (or choose pregnancy `ใช่`) | Orange banner `ควรปรึกษาแพทย์หรือเภสัชกรก่อนทานอาหารเสริม` |
+| 6 | Order | On `/cart` click `สั่งซื้อ` | `สั่งซื้อสำเร็จ`; cart is empty; `/history` shows `#NM-000x`; stock in `/admin` decreased |
+| 7 | History | `/history` → `รายละเอียด` → `สั่งซื้ออีกครั้ง` | Same items are added to the cart |
+| 8 | Weekly signal opt-in | On `/result` turn on `สัญญาณสุขภาพรายสัปดาห์`, choose a city | Message `กรุณายืนยันอีเมลจาก AWS…`; confirm the AWS email; navbar chip shows `· เปิด` |
+| 9 | Weekly signal email | Section 7 below | Email with PM2.5, a tip and refill reminder |
+| 10 | Admin | Avatar → `จัดการสินค้า (แอดมิน)` → add a product with an image | Product appears in the shop with the uploaded image (served from CloudFront `/images/...`) |
+| 11 | Low-stock alert | In `/admin` set a product's stock to e.g. `5` → `บันทึก`. Then Lambda console → `supp-shop-LowStockFunction-…` → **Test** with `{}` | Admin email `NutriMate low stock alert` (also arrives automatically every day at 09:00) |
+
+Where to look when something fails: **CloudWatch → Log groups → `/aws/lambda/supp-shop-<Name>Function-…`**.
+The quiz Lambda logs `plan created` with `"source":"gemini"` or `"source":"fallback"` (fallback = Gemini failed twice and the rule-based plan was used).
+
+---
+
+## 7. Run the weekly job manually (for the demo)
+
+1. AWS Console → **Lambda** → function `supp-shop-WeeklySignalFunction-xxxx`.
+2. Tab **Test** → *Create new event* → name `demo`, event JSON:
+   ```json
+   {}
+   ```
+   (or `{"userId": "<cognito sub>"}` to send to one user only — the sub is in Cognito → Users).
+3. Click **Test**. The result shows a summary, for example:
+   ```json
+   { "msg": "weeklySignal summary", "usersProcessed": 1, "emailsPublished": 1, "geminiNotes": 1,
+     "cities": { "กรุงเทพมหานคร": 23.4 }, "failures": 0 }
+   ```
+4. Check the inbox of the subscribed user (the subscription must be **confirmed** first).
+
+The schedule itself is visible in **Amazon EventBridge → Scheduler → Schedules** (`supp-shop-weekly-signal`, `supp-shop-low-stock`).
+
+---
+
+## 8. Delete everything
+
+```bash
+REGION=ap-southeast-1
+out() { aws cloudformation describe-stacks --stack-name supp-shop --region $REGION --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+
+# 1. Buckets must be empty before the stack can delete them
+aws s3 rm "s3://$(out SiteBucket)" --recursive
+aws s3 rm "s3://$(out ImagesBucket)" --recursive
+
+# 2. Delete the stack (CloudFront takes a few minutes)
+sam delete --stack-name supp-shop --region $REGION --no-prompts
+
+# 3. Delete the API keys
+aws ssm delete-parameter --name /supp/gemini-api-key --region $REGION
+aws ssm delete-parameter --name /supp/openaq-api-key --region $REGION
+```
+SAM also created a deployment bucket named `aws-sam-cli-managed-default-samclisourcebucket-…`; empty and delete it in the S3 console (or delete the `aws-sam-cli-managed-default` stack) if you no longer use SAM.
+
+---
+
+## 9. Cost notes
+
+For a class demo this should cost **≈ $0** — almost everything is inside the AWS Free Tier or pay-per-request:
+
+| Service | Notes |
+|---|---|
+| Lambda, API Gateway HTTP API | Free tier: 1M requests/month each (API GW free for 12 months), then ~$1 per million |
+| DynamoDB on-demand | Pay per request; a demo is a few cents at most. 25 GB storage free |
+| S3 + CloudFront | A few MB of files; CloudFront always-free tier is 1 TB transfer/month |
+| Cognito (Essentials) | Free up to 10,000 monthly active users |
+| SNS | First 1,000 email notifications/month free |
+| EventBridge Scheduler | 14M invocations/month free |
+| SSM Parameter Store | Standard parameters are free |
+| Gemini API / OpenAQ | Free tiers are enough for a demo (watch Gemini rate limits) |
+
+Tips: create an **AWS Budget** with an email alert at $5; delete the stack when the project is graded.
+
+---
+
+## 10. Local development
+
+### Mock mode (no AWS needed)
+```bash
+cd frontend
+npm install
+npm run dev:mock          # same as: VITE_USE_MOCK=true npm run dev
+```
+Open <http://localhost:5173>. A mock signed-in admin user, the 12 products, a 2-item cart, 3 past orders and the sample AI plan from the design files are loaded in memory (reset on reload). The quiz returns a rule-based "mock AI" plan.
+
+### Against the deployed backend
+After a deploy, copy `frontend/.env.production` to `frontend/.env.local` and run `npm run dev`. `http://localhost:5173/` is already allowed as a Cognito callback URL and in API CORS.
+
+### Backend checks
+```bash
+cd backend
+npm install
+npm test               # planner safety-rule tests (no AWS needed)
+sam validate --lint    # template validation (in CloudShell)
+```
+
+---
+
+## 11. Project structure
+
+```
+├─ deploy.sh                 one-command deploy (CloudShell)
+├─ design/app/*.dc.html      UI mockups (reference only, not deployed)
+├─ frontend/                 React 18 + Vite + TypeScript + Tailwind + React Router + Amplify v6 (Auth)
+│  └─ src/
+│     ├─ pages/              Shop, Quiz, Result, Cart, History, Admin
+│     ├─ components/         Navbar, ProductCard, ProductImage, Icons, ui (PageHeader, pills, toast…)
+│     ├─ api/                types, http client (real), mock implementation
+│     ├─ auth/               Cognito managed login (signInWithRedirect, code flow)
+│     ├─ state/              cart / settings / products store
+│     └─ mock/               mock data (same as the design files)
+└─ backend/
+   ├─ template.yaml          AWS SAM template — every AWS resource
+   ├─ src/                   Lambda handlers (Node.js 22, ES modules, AWS SDK v3)
+   │  ├─ products.mjs cart.mjs orders.mjs quiz.mjs me.mjs weeklySignal.mjs lowStock.mjs
+   │  └─ lib/                db, http, ssm, gemini, openaq, planner, catalog
+   └─ scripts/               seed.mjs (12 products), test-planner.mjs
+```
+
+### API routes (prefix `/api`)
+| Route | Auth | Lambda |
+|---|---|---|
+| `GET /api/products` (`cat`, `q`, `price`=`lt300`/`mid`/`gt500`, `sort`=`rec`/`low`/`high`) | public | products |
+| `GET /api/products/{id}` | public | products |
+| `POST /api/products` (create, or update when `productId` exists) | admin | products |
+| `POST /api/uploads` → `{uploadUrl, imageUrl}` | admin | products |
+| `GET` / `PUT /api/cart` | user | cart |
+| `POST` / `GET /api/orders` | user | orders |
+| `POST /api/quiz`, `GET /api/plans/latest` | user | quiz |
+| `GET` / `PUT /api/me` | user | me |
+
+---
+
+## 12. Design decisions and notes
+
+- **Cognito managed login (v2)** with Cognito's default branding (`AWS::Cognito::ManagedLoginBranding`, `UseCognitoProvidedValues`). The domain prefix is `nutrimate-<account id>` so it is unique per account. Cognito's built-in email sender is limited to ~50 emails/day — fine for a demo.
+- The SPA sends the Cognito **ID token** (it carries `email` and `cognito:groups`); the HTTP API JWT authorizer checks issuer + audience (app client id). Admin checks are done in the Lambda.
+- **Cart** = the Orders item with `orderId = "CART"`. **Order numbers** come from an atomic counter item (`userId = "#COUNTER"`) in the Orders table. Placing an order is a DynamoDB transaction (save order + reduce stock with `stock >= qty` condition + delete cart).
+- **AI safety rules are enforced in code** (`backend/src/lib/planner.mjs`): answers are whitelisted, unknown `productId`s are dropped, max 3 items, `needsDoctor` forced when medication/conditions text is filled or pregnancy = `ใช่`; invalid JSON → 1 retry → rule-based plan (goal → category).
+- **OpenAQ**: per city we look up stations measuring PM2.5 within 25 km of the city centre (`/v3/locations`) and read the nearest station with a reading from the last 3 days (`/v3/locations/{id}/latest`). This happens **once per distinct city per run** and is cached for the run. No recent data → the email says so.
+- **SNS per-user emails**: every user's email subscription to `supp-wellness-signal` has the filter policy `{"userId":["<sub>"]}` and each published message carries a `userId` attribute, so each user only receives their own note. Emails end with the AI disclaimer and how to turn the email off.
+- **Images bucket CORS** allows `PUT` from any origin (`*`) to avoid a circular dependency between the bucket and the CloudFront domain; uploads still require a 5-minute presigned URL issued only to admins.
+- **Gemini model** is the template parameter `GeminiModel` (default `gemini-flash-latest`). Change it with `GEMINI_MODEL=... ./deploy.sh` if Google renames models.
+- The Lambdas use the AWS SDK v3 that ships with the Node.js 22 runtime; only the S3 client + presigner are bundled (for presigned uploads).
+- UI behaviour choices not fixed by the mockups: the quiz starts at step 1 and is pre-filled from your latest plan; the newest order row in History starts expanded (as in the mockup); `ดูรายละเอียดสินค้า` opens the shop filtered to that product; `สั่งซื้ออีกครั้ง` adds the items and opens the cart; the Admin page also lets admins edit stock inline (handy for the low-stock demo).
+
+## 13. Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `deploy.sh: /usr/bin/env: 'bash\r'` | The file got Windows line endings: `sed -i 's/\r$//' deploy.sh` |
+| `redirect_mismatch` on login | You opened the site on a URL that is not the CloudFront URL or `http://localhost:5173` |
+| Quiz always returns a generic plan | Check the QuizFunction logs: wrong Gemini key (`HTTP 400/403`) or model name (`HTTP 404`) — fix the key in SSM or redeploy with `GEMINI_MODEL=...` |
+| No weekly email | The SNS subscription is still *pending confirmation*; check spam and click the AWS confirm link |
+| Weekly email says no PM2.5 data | OpenAQ had no fresh reading near that city (or the key is wrong — see WeeklySignalFunction logs) |
+| Admin page says "สำหรับผู้ดูแลระบบเท่านั้น" | Add your user to the `admin` group, then sign out and in again |
+| Bucket not empty when deleting | Run the `aws s3 rm … --recursive` commands in section 8 first |
