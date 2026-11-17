@@ -2,7 +2,8 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
   NutriMate - AI supplement shop. S3 + CloudFront site, Cognito managed login, HTTP API + Lambda,
-  DynamoDB, EventBridge Scheduler, SNS and SSM Parameter Store (Gemini + OpenAQ keys).
+  DynamoDB, EventBridge rules, SNS and SSM Parameter Store (Gemini + OpenAQ keys).
+  AWS Academy Learner Lab compatible: creates no IAM roles or policies (all functions use LabRole).
 
 Parameters:
   AdminEmail:
@@ -289,17 +290,17 @@ Resources:
                 - !Ref UserPoolClient
 
   # ---------------------------------------------------------------- Lambda functions
+  # AWS Academy Learner Lab: the stack must not create IAM roles/policies.
+  # Every function runs as the pre-existing LabRole (it already allows DynamoDB, S3, SNS, SSM, Logs).
   ProductsFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: products.handler
       Description: Product list/detail, admin add/edit, presigned image upload
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Environment:
         Variables:
           IMAGES_BUCKET: !Ref ImagesBucket
-      Policies:
-        - DynamoDBCrudPolicy: { TableName: !Ref ProductsTable }
-        - S3WritePolicy: { BucketName: !Ref ImagesBucket }
       Events:
         List:
           Type: HttpApi
@@ -319,9 +320,7 @@ Resources:
     Properties:
       Handler: cart.handler
       Description: Read / replace the cart
-      Policies:
-        - DynamoDBCrudPolicy: { TableName: !Ref OrdersTable }
-        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Events:
         Get:
           Type: HttpApi
@@ -335,9 +334,7 @@ Resources:
     Properties:
       Handler: orders.handler
       Description: Cart to order (reduces stock), list my orders
-      Policies:
-        - DynamoDBCrudPolicy: { TableName: !Ref OrdersTable }
-        - DynamoDBCrudPolicy: { TableName: !Ref ProductsTable }
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Events:
         Create:
           Type: HttpApi
@@ -351,12 +348,9 @@ Resources:
     Properties:
       Handler: quiz.handler
       Description: Lifestyle quiz -> Gemini plan; latest plan
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Timeout: 29
       MemorySize: 512
-      Policies:
-        - DynamoDBCrudPolicy: { TableName: !Ref PlansTable }
-        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
-        - SSMParameterReadPolicy: { ParameterName: supp/gemini-api-key }
       Events:
         Submit:
           Type: HttpApi
@@ -370,17 +364,10 @@ Resources:
     Properties:
       Handler: me.handler
       Description: City + weekly signal opt-in (SNS subscribe/unsubscribe)
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Environment:
         Variables:
           SIGNAL_TOPIC_ARN: !Ref SignalTopic
-      Policies:
-        - DynamoDBCrudPolicy: { TableName: !Ref UsersTable }
-        - Statement:
-            - Effect: Allow
-              Action: [sns:Subscribe, sns:Unsubscribe]
-              Resource:
-                - !Ref SignalTopic
-                - !Sub ${SignalTopic}:*
       Events:
         Get:
           Type: HttpApi
@@ -394,47 +381,63 @@ Resources:
     Properties:
       Handler: weeklySignal.handler
       Description: Monday 08:00 Bangkok - PM2.5 + Gemini note -> SNS email per user
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Timeout: 300
       MemorySize: 512
       Environment:
         Variables:
           SIGNAL_TOPIC_ARN: !Ref SignalTopic
-      Policies:
-        - DynamoDBReadPolicy: { TableName: !Ref UsersTable }
-        - DynamoDBReadPolicy: { TableName: !Ref PlansTable }
-        - DynamoDBReadPolicy: { TableName: !Ref OrdersTable }
-        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
-        - SSMParameterReadPolicy: { ParameterName: supp/gemini-api-key }
-        - SSMParameterReadPolicy: { ParameterName: supp/openaq-api-key }
-        - SNSPublishMessagePolicy: { TopicName: !GetAtt SignalTopic.TopicName }
-      Events:
-        Weekly:
-          Type: ScheduleV2
-          Properties:
-            Name: !Sub ${AWS::StackName}-weekly-signal
-            ScheduleExpression: cron(0 8 ? * MON *)
-            ScheduleExpressionTimezone: Asia/Bangkok
-            Description: Wellness Signal email every Monday 08:00 Asia/Bangkok
 
   LowStockFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: lowStock.handler
       Description: Daily email to admin when a product's stock is below 10
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole
       Environment:
         Variables:
           ADMIN_TOPIC_ARN: !Ref AdminTopic
-      Policies:
-        - DynamoDBReadPolicy: { TableName: !Ref ProductsTable }
-        - SNSPublishMessagePolicy: { TopicName: !GetAtt AdminTopic.TopicName }
-      Events:
-        Daily:
-          Type: ScheduleV2
-          Properties:
-            Name: !Sub ${AWS::StackName}-low-stock
-            ScheduleExpression: cron(0 9 * * ? *)
-            ScheduleExpressionTimezone: Asia/Bangkok
-            Description: Daily low-stock check 09:00 Asia/Bangkok
+
+  # ---------------------------------------------------------------- EventBridge schedules
+  # Plain EventBridge rules (cron is UTC; Bangkok = UTC+7, no daylight saving).
+  # Rules invoke Lambda through a resource-based permission, so no IAM role is needed.
+  WeeklySignalRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${AWS::StackName}-weekly-signal
+      Description: Wellness Signal email every Monday 08:00 Asia/Bangkok (01:00 UTC)
+      ScheduleExpression: cron(0 1 ? * MON *)
+      State: ENABLED
+      Targets:
+        - Id: weekly-signal
+          Arn: !GetAtt WeeklySignalFunction.Arn
+
+  WeeklySignalPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref WeeklySignalFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt WeeklySignalRule.Arn
+
+  LowStockRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub ${AWS::StackName}-low-stock
+      Description: Daily low-stock check 09:00 Asia/Bangkok (02:00 UTC)
+      ScheduleExpression: cron(0 2 * * ? *)
+      State: ENABLED
+      Targets:
+        - Id: low-stock
+          Arn: !GetAtt LowStockFunction.Arn
+
+  LowStockPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LowStockFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt LowStockRule.Arn
 
 Outputs:
   ApiUrl:

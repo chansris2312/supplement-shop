@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# One-command deploy for NutriMate. Run from the repo root in AWS CloudShell (ap-southeast-1):
+# One-command deploy for NutriMate. Run from the repo root in AWS CloudShell (us-east-1):
 #   ADMIN_EMAIL=you@example.com ./deploy.sh
 # Optional: GEMINI_MODEL=gemini-2.5-flash ./deploy.sh   (overrides the template default)
 set -euo pipefail
 
 STACK=supp-shop
-REGION=ap-southeast-1
+REGION=us-east-1
 export AWS_REGION=$REGION AWS_DEFAULT_REGION=$REGION
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
@@ -30,10 +30,10 @@ Create the missing parameter(s), then run ./deploy.sh again.
 (read -s keeps the key out of your shell history and screen)
 
   read -s -p "Gemini API key: " KEY && echo && \
-  aws ssm put-parameter --name /supp/gemini-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+  aws ssm put-parameter --name /supp/gemini-api-key --type SecureString --value "$KEY" --overwrite --region us-east-1 && unset KEY
 
   read -s -p "OpenAQ API key: " KEY && echo && \
-  aws ssm put-parameter --name /supp/openaq-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+  aws ssm put-parameter --name /supp/openaq-api-key --type SecureString --value "$KEY" --overwrite --region us-east-1 && unset KEY
 EOF
   exit 1
 fi

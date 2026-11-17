@@ -41,7 +41,7 @@ flowchart LR
   LQ -->|GetParameter| SSM[SSM Parameter Store<br/>SecureString keys]
   LQ -->|generateContent| GEM[[Gemini API]]
   LM -->|Subscribe / Unsubscribe| SNS1[SNS supp-wellness-signal]
-  SCH[EventBridge Scheduler<br/>Mon 08:00 · daily 09:00] --> LW[Lambda weeklySignal]
+  SCH[EventBridge rules<br/>Mon 01:00 UTC · daily 02:00 UTC] --> LW[Lambda weeklySignal]
   SCH --> LS[Lambda lowStock]
   LW --> DDB
   LW --> SSM
@@ -54,7 +54,7 @@ flowchart LR
   SNS2 --> MAIL2[Admin email]
 ```
 
-Everything is defined in one AWS SAM template: [`backend/template.yaml`](backend/template.yaml). Region: **ap-southeast-1 (Singapore)**.
+Everything is defined in one AWS SAM template: [`backend/template.yaml`](backend/template.yaml). Region: **us-east-1 (N. Virginia)** — the region used by AWS Academy Learner Lab.
 
 ---
 
@@ -68,20 +68,20 @@ Everything is defined in one AWS SAM template: [`backend/template.yaml`](backend
 | 4 | **Amazon API Gateway (HTTP API)** | `/api/*` routes, JWT authorizer, CORS |
 | 5 | **AWS Lambda** | 7 Node.js 22 functions: products, cart, orders, quiz, me, weeklySignal, lowStock |
 | 6 | **Amazon DynamoDB** | 4 on-demand tables: Products, Users, Plans, Orders |
-| 7 | **Amazon EventBridge Scheduler** | `cron(0 8 ? * MON *)` Asia/Bangkok → weeklySignal; `cron(0 9 * * ? *)` → lowStock |
+| 7 | **Amazon EventBridge** (scheduled rules) | `cron(0 1 ? * MON *)` UTC = Monday 08:00 Bangkok → weeklySignal; `cron(0 2 * * ? *)` UTC = 09:00 Bangkok → lowStock |
 | 8 | **Amazon SNS** | `supp-wellness-signal` (per-user email subscriptions with filter policy), `supp-admin-alerts` |
 | 9 | **AWS Systems Manager Parameter Store** | `/supp/gemini-api-key`, `/supp/openaq-api-key` (SecureString) |
 
-Not counted but used: IAM (least-privilege roles via SAM policy templates), CloudWatch Logs (every Lambda), CloudFormation (via SAM).
+Not counted but used: IAM (the existing Learner Lab `LabRole` — the stack creates no IAM roles or policies), CloudWatch Logs (every Lambda), CloudFormation (via SAM).
 External APIs: **Google Gemini API** (AI) and **OpenAQ API v3** (PM2.5).
 
-**Level 4 (automated + integrated):** the Wellness Signal runs on a schedule with no human action and chains Scheduler → Lambda → DynamoDB → OpenAQ → Gemini → SNS → email.
+**Level 4 (automated + integrated):** the Wellness Signal runs on a schedule with no human action and chains EventBridge → Lambda → DynamoDB → OpenAQ → Gemini → SNS → email.
 
 ---
 
 ## 4. Prerequisites
 
-1. **An AWS account** you can sign in to (AWS Academy Learner Lab may not allow Cognito/CloudFront — a normal account is recommended). Use an IAM user/role with admin rights for the deploy.
+1. **An AWS Academy Learner Lab** (see section 5). In a normal AWS account you would first need an IAM role named `LabRole` that Lambda can assume, with access to DynamoDB, S3, SNS, SSM and CloudWatch Logs.
 2. **A Gemini API key** — go to <https://aistudio.google.com/app/apikey> → *Create API key*. (Free tier is enough for a demo. Note: on the free tier Google may use prompts to improve its products — we only send anonymous quiz answers.)
 3. **An OpenAQ API key** — create a free account at <https://explore.openaq.org/register>, then copy the key from your account settings page.
 4. **An email address** for admin alerts (you must be able to click the confirmation email).
@@ -91,11 +91,32 @@ You do **not** need anything installed on your own computer — everything runs 
 
 ---
 
-## 5. Deploy step by step (AWS CloudShell)
+## 5. Running in AWS Academy Learner Lab
 
-### 5.1 Open CloudShell in the right region
+This project is built to deploy into an **AWS Academy Learner Lab** account, which has a few special rules.
+
+1. **Start the lab first.** AWS Academy → your course → *Modules* → *Launch AWS Academy Learner Lab* → **Start Lab**. Wait until the dot next to **AWS** turns green (1–2 minutes), then click **AWS** to open the console. All console, CloudShell and CLI access only works while the lab is running.
+2. **Region us-east-1.** Learner Lab only lets you use **US East (N. Virginia) us-east-1** (and us-west-2). This project uses **us-east-1** everywhere: `deploy.sh` sets it, and all commands in this README pass `--region us-east-1`. Check the console region (top right) before opening CloudShell.
+3. **LabRole instead of new IAM roles.** Learner Lab does not allow creating IAM roles or policies, so the template creates **none**:
+   - every Lambda runs as the existing **`LabRole`** (`arn:aws:iam::<account-id>:role/LabRole`);
+   - the weekly / daily jobs are **EventBridge rules** that call Lambda through a resource-based permission (no role);
+   - API Gateway also calls Lambda through resource-based permissions, and CloudFront reads S3 through bucket policies.
+
+   Check that LabRole exists:
+   ```bash
+   aws iam get-role --role-name LabRole --query Role.Arn --output text
+   ```
+4. **Sessions expire, resources stay.** A lab session lasts about 4 hours. When the timer reaches 0 your console/CloudShell session ends (you will see `ExpiredToken` errors), but the deployed stack, tables, buckets, CloudFront, SSM parameters and data **stay**. Click **Start Lab** again to continue; your CloudShell home folder (with the cloned repo) is usually still there — if not, clone again and re-run `./deploy.sh` (it only updates what changed).
+5. **Before a demo** start the lab, open the site once, and if the Monday job did not run while the lab was stopped, trigger it manually (section 8).
+6. **Budget.** Learner Lab has a fixed credit; this app costs almost nothing (section 10), but delete the stack when you are finished (section 9).
+
+---
+
+## 6. Deploy step by step (AWS CloudShell)
+
+### 6.1 Open CloudShell in the right region
 1. Sign in to the AWS Console.
-2. Top-right region selector → **Asia Pacific (Singapore) ap-southeast-1**.
+2. Top-right region selector → **US East (N. Virginia) us-east-1**.
 3. Click the CloudShell icon (`>_`) in the top bar and wait for the prompt.
 
 Check the tools (Node.js must be 20 or newer):
@@ -105,7 +126,7 @@ sam --version
 node -v
 ```
 
-### 5.2 Get the code into CloudShell
+### 6.2 Get the code into CloudShell
 Either clone your repository:
 ```bash
 git clone https://github.com/<your-team>/<your-repo>.git supp-shop
@@ -120,21 +141,21 @@ Make the script executable:
 chmod +x deploy.sh
 ```
 
-### 5.3 Store the API keys in SSM Parameter Store (once)
+### 6.3 Store the API keys in SSM Parameter Store (once)
 `read -s` hides the key while you paste it and keeps it out of the shell history:
 ```bash
 read -s -p "Gemini API key: " KEY && echo && \
-aws ssm put-parameter --name /supp/gemini-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+aws ssm put-parameter --name /supp/gemini-api-key --type SecureString --value "$KEY" --overwrite --region us-east-1 && unset KEY
 
 read -s -p "OpenAQ API key: " KEY && echo && \
-aws ssm put-parameter --name /supp/openaq-api-key --type SecureString --value "$KEY" --overwrite --region ap-southeast-1 && unset KEY
+aws ssm put-parameter --name /supp/openaq-api-key --type SecureString --value "$KEY" --overwrite --region us-east-1 && unset KEY
 ```
 Check (shows names only, not values):
 ```bash
-aws ssm describe-parameters --region ap-southeast-1 --query "Parameters[?starts_with(Name,'/supp/')].Name"
+aws ssm describe-parameters --region us-east-1 --query "Parameters[?starts_with(Name,'/supp/')].Name"
 ```
 
-### 5.4 Deploy everything with one command
+### 6.4 Deploy everything with one command
 ```bash
 ADMIN_EMAIL=your.name@example.com ./deploy.sh
 ```
@@ -152,25 +173,25 @@ GEMINI_MODEL=gemini-2.5-flash ADMIN_EMAIL=your.name@example.com ./deploy.sh
 ```
 You can re-run `./deploy.sh` any time after changing code — it updates the stack and re-uploads the site.
 
-### 5.5 After the deploy
+### 6.5 After the deploy
 1. **Confirm the admin email:** open the "AWS Notification - Subscription Confirmation" email sent to `ADMIN_EMAIL` and click *Confirm subscription*.
 2. **Open the site URL** printed at the end (`https://dxxxxxxxx.cloudfront.net`).
 3. **Create an account:** click `เข้าสู่ระบบ` → *Create an account* → enter email + password → type the code from the verification email.
 4. **Make yourself admin** (the script prints this command with your pool id filled in):
    ```bash
-   aws cognito-idp admin-add-user-to-group --region ap-southeast-1 \
+   aws cognito-idp admin-add-user-to-group --region us-east-1 \
      --user-pool-id <UserPoolId> --group-name admin --username <your-email>
    ```
    Sign out and sign in again so the new group is in your token. The avatar menu now shows `จัดการสินค้า (แอดมิน)`.
 
 To see all outputs again:
 ```bash
-aws cloudformation describe-stacks --stack-name supp-shop --region ap-southeast-1 --query "Stacks[0].Outputs" --output table
+aws cloudformation describe-stacks --stack-name supp-shop --region us-east-1 --query "Stacks[0].Outputs" --output table
 ```
 
 ---
 
-## 6. How to test each feature
+## 7. How to test each feature
 
 | # | Feature | Steps | Expected |
 |---|---|---|---|
@@ -182,7 +203,7 @@ aws cloudformation describe-stacks --stack-name supp-shop --region ap-southeast-
 | 6 | Order | On `/cart` click `สั่งซื้อ` | `สั่งซื้อสำเร็จ`; cart is empty; `/history` shows `#NM-000x`; stock in `/admin` decreased |
 | 7 | History | `/history` → `รายละเอียด` → `สั่งซื้ออีกครั้ง` | Same items are added to the cart |
 | 8 | Weekly signal opt-in | On `/result` turn on `สัญญาณสุขภาพรายสัปดาห์`, choose a city | Message `กรุณายืนยันอีเมลจาก AWS…`; confirm the AWS email; navbar chip shows `· เปิด` |
-| 9 | Weekly signal email | Section 7 below | Email with PM2.5, a tip and refill reminder |
+| 9 | Weekly signal email | Section 8 below | Email with PM2.5, a tip and refill reminder |
 | 10 | Admin | Avatar → `จัดการสินค้า (แอดมิน)` → add a product with an image | Product appears in the shop with the uploaded image (served from CloudFront `/images/...`) |
 | 11 | Low-stock alert | In `/admin` set a product's stock to e.g. `5` → `บันทึก`. Then Lambda console → `supp-shop-LowStockFunction-…` → **Test** with `{}` | Admin email `NutriMate low stock alert` (also arrives automatically every day at 09:00) |
 
@@ -191,7 +212,7 @@ The quiz Lambda logs `plan created` with `"source":"gemini"` or `"source":"fallb
 
 ---
 
-## 7. Run the weekly job manually (for the demo)
+## 8. Run the weekly job manually (for the demo)
 
 1. AWS Console → **Lambda** → function `supp-shop-WeeklySignalFunction-xxxx`.
 2. Tab **Test** → *Create new event* → name `demo`, event JSON:
@@ -206,14 +227,14 @@ The quiz Lambda logs `plan created` with `"source":"gemini"` or `"source":"fallb
    ```
 4. Check the inbox of the subscribed user (the subscription must be **confirmed** first).
 
-The schedule itself is visible in **Amazon EventBridge → Scheduler → Schedules** (`supp-shop-weekly-signal`, `supp-shop-low-stock`).
+The schedules are visible in **Amazon EventBridge → Rules** (`supp-shop-weekly-signal`, `supp-shop-low-stock`). EventBridge cron is in **UTC**: `cron(0 1 ? * MON *)` = Monday 08:00 in Bangkok (UTC+7).
 
 ---
 
-## 8. Delete everything
+## 9. Delete everything
 
 ```bash
-REGION=ap-southeast-1
+REGION=us-east-1
 out() { aws cloudformation describe-stacks --stack-name supp-shop --region $REGION --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
 
 # 1. Buckets must be empty before the stack can delete them
@@ -231,7 +252,7 @@ SAM also created a deployment bucket named `aws-sam-cli-managed-default-samcliso
 
 ---
 
-## 9. Cost notes
+## 10. Cost notes
 
 For a class demo this should cost **≈ $0** — almost everything is inside the AWS Free Tier or pay-per-request:
 
@@ -242,7 +263,7 @@ For a class demo this should cost **≈ $0** — almost everything is inside the
 | S3 + CloudFront | A few MB of files; CloudFront always-free tier is 1 TB transfer/month |
 | Cognito (Essentials) | Free up to 10,000 monthly active users |
 | SNS | First 1,000 email notifications/month free |
-| EventBridge Scheduler | 14M invocations/month free |
+| EventBridge scheduled rules | Free (scheduled events are not charged) |
 | SSM Parameter Store | Standard parameters are free |
 | Gemini API / OpenAQ | Free tiers are enough for a demo (watch Gemini rate limits) |
 
@@ -250,7 +271,7 @@ Tips: create an **AWS Budget** with an email alert at $5; delete the stack when 
 
 ---
 
-## 10. Local development
+## 11. Local development
 
 ### Mock mode (no AWS needed)
 ```bash
@@ -273,7 +294,7 @@ sam validate --lint    # template validation (in CloudShell)
 
 ---
 
-## 11. Project structure
+## 12. Project structure
 
 ```
 ├─ deploy.sh                 one-command deploy (CloudShell)
@@ -308,8 +329,9 @@ sam validate --lint    # template validation (in CloudShell)
 
 ---
 
-## 12. Design decisions and notes
+## 13. Design decisions and notes
 
+- **No IAM resources in the template** (Learner Lab rule): every Lambda sets `Role: arn:aws:iam::${AWS::AccountId}:role/LabRole`; schedules are plain `AWS::Events::Rule`s that invoke Lambda through `AWS::Lambda::Permission` (resource-based, no role); API Gateway invokes Lambda the same way; CloudFront reads S3 through bucket policies (OAC). Trade-off: LabRole is broad, so the functions are not least-privilege.
 - **Cognito managed login (v2)** with Cognito's default branding (`AWS::Cognito::ManagedLoginBranding`, `UseCognitoProvidedValues`). The domain prefix is `nutrimate-<account id>` so it is unique per account. Cognito's built-in email sender is limited to ~50 emails/day — fine for a demo.
 - The SPA sends the Cognito **ID token** (it carries `email` and `cognito:groups`); the HTTP API JWT authorizer checks issuer + audience (app client id). Admin checks are done in the Lambda.
 - **Cart** = the Orders item with `orderId = "CART"`. **Order numbers** come from an atomic counter item (`userId = "#COUNTER"`) in the Orders table. Placing an order is a DynamoDB transaction (save order + reduce stock with `stock >= qty` condition + delete cart).
@@ -321,7 +343,7 @@ sam validate --lint    # template validation (in CloudShell)
 - The Lambdas use the AWS SDK v3 that ships with the Node.js 22 runtime; only the S3 client + presigner are bundled (for presigned uploads).
 - UI behaviour choices not fixed by the mockups: the quiz starts at step 1 and is pre-filled from your latest plan; the newest order row in History starts expanded (as in the mockup); `ดูรายละเอียดสินค้า` opens the shop filtered to that product; `สั่งซื้ออีกครั้ง` adds the items and opens the cart; the Admin page also lets admins edit stock inline (handy for the low-stock demo).
 
-## 13. Troubleshooting
+## 14. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -331,4 +353,7 @@ sam validate --lint    # template validation (in CloudShell)
 | No weekly email | The SNS subscription is still *pending confirmation*; check spam and click the AWS confirm link |
 | Weekly email says no PM2.5 data | OpenAQ had no fresh reading near that city (or the key is wrong — see WeeklySignalFunction logs) |
 | Admin page says "สำหรับผู้ดูแลระบบเท่านั้น" | Add your user to the `admin` group, then sign out and in again |
-| Bucket not empty when deleting | Run the `aws s3 rm … --recursive` commands in section 8 first |
+| `ExpiredToken` / `InvalidClientTokenId` in CloudShell | The Learner Lab session ended. Start the lab again, reopen the console from the lab page and open a new CloudShell |
+| `not authorized to perform: iam:CreateRole` | You are deploying an old template version — pull the latest code (this template creates no IAM roles) |
+| A resource fails with `AccessDenied` / `explicit deny` | Learner Lab blocks some services/features; read the lab's **Readme** for the allowed list and tell your instructor |
+| Bucket not empty when deleting | Run the `aws s3 rm … --recursive` commands in section 9 first |

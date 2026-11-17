@@ -25,7 +25,7 @@ const PRODUCTS = [
   ['p12', 'ธาตุเหล็ก', 'พลังงาน', 220],
 ].map(([productId, name, cat, price]) => ({ productId, name, cat, price, stock: 50 }));
 
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || 'ap-southeast-1' }));
+const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' }));
 
 const existing = await ddb.send(new ScanCommand({ TableName: TABLE, Limit: 1 }));
 if (existing.Items?.length) {

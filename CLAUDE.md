@@ -6,14 +6,14 @@ Build everything in this file. Do not ask for confirmation between steps; make r
 - **App:** a supplement e-commerce site. Customers answer a lifestyle questionnaire; AI (Google Gemini API) recommends supplements with reasons and how to take them; customers buy them; a weekly automated email ("Wellness Signal") sends air-quality-aware tips.
 - **Brand:** "NutriMate" (working name). All UI text is **Thai**, exactly as written below.
 - **UI source of truth:** `design/app/*.dc.html` (5 files). Build the React UI to look and behave **exactly** like them (layout, colors, spacing, copy, interactions). Section 6 summarizes them.
-- **Deploy target:** AWS, region `ap-southeast-1`, using **AWS SAM**, deployed from AWS CloudShell with `./deploy.sh`.
+- **Deploy target:** AWS, region `us-east-1` (AWS Academy Learner Lab), using **AWS SAM**, deployed from AWS CloudShell with `./deploy.sh`.
 
 ---
 
 ## 1. Assessment rules this project must satisfy
 
 - At least 4 counted AWS services. IAM, VPC, CloudWatch, CLI and Cost & Usage Report do **not** count.
-- Counted services used: **S3, CloudFront, Cognito, API Gateway (HTTP API), Lambda, DynamoDB, EventBridge Scheduler, SNS, Systems Manager Parameter Store**.
+- Counted services used: **S3, CloudFront, Cognito, API Gateway (HTTP API), Lambda, DynamoDB, EventBridge, SNS, Systems Manager Parameter Store**.
 - External APIs: **Gemini API** (AI) and **OpenAQ API v3** (PM2.5 air quality).
 - Level 4 = automated + integrated: the weekly signal job must run on a schedule with no human action.
 - Deliverable: `README.md` must be a step-by-step guide that **another student group can follow from zero** to deploy the app.
@@ -49,9 +49,9 @@ Build everything in this file. Do not ask for confirmation between steps; make r
 | CloudFront | Default root `index.html`; SPA fallback: 403/404 → `/index.html` 200. HTTPS. |
 | Cognito | User Pool (email sign-in) + App Client (no secret, OAuth code flow, scopes openid email profile) + domain. Callback/logout URLs = CloudFront URL and `http://localhost:5173`. Group `admin`. |
 | API Gateway HTTP API | Routes in section 4. JWT authorizer = the Cognito pool. CORS for CloudFront URL and localhost:5173. |
-| Lambda (Node.js 22) | One function per area: products, cart, orders, quiz, me, weeklySignal, lowStock. Least-privilege IAM policies via SAM policy templates. |
+| Lambda (Node.js 22) | One function per area: products, cart, orders, quiz, me, weeklySignal, lowStock. Learner Lab: the template creates **no IAM roles or policies**; every function sets `Role: !Sub arn:aws:iam::${AWS::AccountId}:role/LabRole`. |
 | DynamoDB | 4 tables, on-demand (section 5). |
-| EventBridge Scheduler | `cron(0 8 ? * MON *)` timezone `Asia/Bangkok` → weeklySignal. Daily `cron(0 9 * * ? *)` → lowStock. |
+| EventBridge rules | `AWS::Events::Rule` + `AWS::Lambda::Permission` (no role). Cron is UTC: `cron(0 1 ? * MON *)` (= Monday 08:00 Bangkok) → weeklySignal; `cron(0 2 * * ? *)` (= 09:00 Bangkok) → lowStock. |
 | SNS | Topic `supp-wellness-signal` (per-user email subscriptions with filter policy on `userId`). Topic `supp-admin-alerts` (admin email from a template parameter `AdminEmail`). |
 | SSM Parameter Store | `/supp/gemini-api-key`, `/supp/openaq-api-key` (SecureString, created manually before deploy). Lambdas read them **at runtime** with `GetParameter WithDecryption` and cache in memory. Never put keys in code, env files or Git. |
 | CloudWatch Logs | Default for every Lambda. |
@@ -208,7 +208,7 @@ Stock: 50 each. Prices and products are samples. Mock mode also includes the 3 s
 ```
 - In code (not only in the prompt): drop any `productId` not in Products; force `needsDoctor = true` if medication/conditions text is non-empty or pregnancy = `ใช่`; validate JSON, retry once, then fall back to a rule-based plan from goal → category.
 
-### Weekly signal (Lambda `weeklySignal`, EventBridge Scheduler, Monday 08:00 Asia/Bangkok)
+### Weekly signal (Lambda `weeklySignal`, EventBridge rule, Monday 08:00 Asia/Bangkok = 01:00 UTC)
 1. Scan Users with `weeklySignal = true`.
 2. For each **distinct city**, get latest PM2.5 from OpenAQ v3 (header `X-API-Key`), one call per city, cache in the run. No data → say so.
 3. For each user: latest plan + last order date → Gemini writes a 3-line Thai note (air quality this week, one lifestyle tip, refill reminder if the last order is over 25 days old).

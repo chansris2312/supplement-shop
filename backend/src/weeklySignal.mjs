@@ -1,4 +1,4 @@
-// "Wellness Signal" — runs every Monday 08:00 Asia/Bangkok (EventBridge Scheduler).
+// "Wellness Signal" — runs every Monday 08:00 Asia/Bangkok = 01:00 UTC (EventBridge rule).
 // 1) users with weeklySignal = true  2) PM2.5 once per distinct city  3) Gemini writes a 3-line note
 // 4) publish to SNS with message attribute userId (each email subscription filters on its own userId).
 // Manual test: Lambda console > Test with {} (all users) or {"userId": "<cognito sub>"} (one user).
