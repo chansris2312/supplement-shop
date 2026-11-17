@@ -251,6 +251,13 @@ The schedules are visible in **Amazon EventBridge → Rules** (`supp-shop-weekly
 
 ## 9. Delete everything
 
+**Easiest:** run the cleanup script from the repo folder in CloudShell. It asks you to type `DELETE`, then removes the `supp-shop` stack (after emptying its buckets), the two API keys in Parameter Store, the Lambda log groups, the SAM upload bucket/stack and the project files in CloudShell (`~/supp-shop`, `/tmp/supp-shop`, npm/SAM caches):
+```bash
+bash cleanup.sh
+```
+> Note: step 4 deletes **every** `aws-sam-cli-managed-default…` bucket in the account, which other SAM projects in the same account also use.
+
+Or do it by hand:
 ```bash
 REGION=us-east-1
 out() { aws cloudformation describe-stacks --stack-name supp-shop --region $REGION --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
