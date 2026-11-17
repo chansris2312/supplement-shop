@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>App · ประวัติการซื้อ</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&amp;family=Noto+Sans+Thai:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#F4FAF9;font-family:'Noto Sans Thai',Tahoma,sans-serif;color:#1B2A27}
+a{color:#1E7F74}a:hover{color:#165F57}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #F4FAF9">
+<header style="background: #FFFFFF; border-bottom: 1px solid #DCEBE7">
+<div style="padding: 12px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #17302C">
+<svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#1E7F74" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 26C6 14 14 6 26 6c0 12-8 20-20 20z"/><path d="M6 26l11-11"/></svg>
+<span style="font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 21px">NutriMate</span>
+</a>
+<nav aria-label="เมนูหลัก" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>ร้านค้า</a>
+<a href="Quiz.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/></svg>วิเคราะห์ไลฟ์สไตล์</a>
+<a href="Result.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg>ผลวิเคราะห์จาก AI</a>
+<a href="Cart.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>ตะกร้า<span style="min-width: 22px; padding: 1px 7px; box-sizing: border-box; border-radius: 999px; background: #1E7F74; color: #FFFFFF; font-size: 12px; font-weight: 600; text-align: center">0</span></a>
+<a href="History.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-weight: 600; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#155E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>ประวัติการซื้อ</a>
+</nav>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 999px; background: #1E7F74"></span>อีเมลสุขภาพรายสัปดาห์ · เปิด</span>
+<span role="img" aria-label="ผู้ใช้ตัวอย่าง" style="width: 38px; height: 38px; border-radius: 999px; background: #BFE8DF; color: #155E56; display: flex; align-items: center; justify-content: center; font-weight: 600">ผ</span>
+</div>
+</div>
+</header>
+<div style="display: flex; flex-direction: column">
+<header style="background: transparent; padding: 24px 32px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<h1 style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 24px">ประวัติการซื้อ</h1>
+<a href="Shop.dc.html" style="font-size: 15px">เลือกซื้อสินค้า →</a>
+</header>
+<main style="padding: 28px 32px 48px; display: flex; flex-direction: column; gap: 24px">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 14px; color: #5B6B66">คำสั่งซื้อทั้งหมด</span><span style="font-family: 'Prompt', Tahoma, sans-serif; font-size: 28px; font-weight: 600">{{n}} ครั้ง</span></div>
+<div style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 14px; color: #5B6B66">ยอดซื้อรวม</span><span style="font-family: 'Prompt', Tahoma, sans-serif; font-size: 28px; font-weight: 600">{{sumText}}</span></div>
+<div style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px"><span style="font-size: 14px; color: #5B6B66">สั่งซื้อล่าสุด</span><span style="font-family: 'Prompt', Tahoma, sans-serif; font-size: 28px; font-weight: 600">{{last}}</span></div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; overflow-x: auto">
+<table style="width: 100%; min-width: 760px; border-collapse: collapse; font-size: 15px">
+<thead>
+<tr style="background: #EEF7F5; text-align: left">
+<th scope="col" style="padding: 14px 20px; font-weight: 600">เลขที่คำสั่งซื้อ</th>
+<th scope="col" style="padding: 14px 20px; font-weight: 600">วันที่</th>
+<th scope="col" style="padding: 14px 20px; font-weight: 600">รายการ</th>
+<th scope="col" style="padding: 14px 20px; font-weight: 600; text-align: right">ยอดรวม</th>
+<th scope="col" style="padding: 14px 20px; font-weight: 600">สถานะ</th>
+<th scope="col" style="padding: 14px 20px; font-weight: 600"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">รายละเอียด</span></th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{orders}}" as="o" hint-placeholder-count="3">
+<tr style="border-top: 1px solid #DCEBE7; vertical-align: top">
+<td style="padding: 16px 20px; font-weight: 600">{{o.id}}</td>
+<td style="padding: 16px 20px; color: #5B6B66; white-space: nowrap">{{o.date}}</td>
+<td style="padding: 16px 20px; line-height: 1.7; white-space: pre-line">{{o.itemsText}}</td>
+<td style="padding: 16px 20px; text-align: right; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; white-space: nowrap">{{o.totalText}}</td>
+<td style="padding: 16px 20px"><span style="display: inline-block; font-size: 13px; font-weight: 600; color: #1E7F74; background: #DFF4EF; padding: 4px 12px; border-radius: 999px">สั่งซื้อสำเร็จ</span></td>
+<td style="padding: 8px 20px; text-align: right"><button type="button" aria-expanded="{{o.expanded}}" onClick="{{o.toggle}}" style="height: 44px; padding: 0 14px; border: 1px solid #C5DAD5; border-radius: 10px; background: #FFFFFF; color: #1B2A27; font-family: inherit; font-size: 14px; cursor: pointer">{{o.toggleLabel}}</button></td>
+</tr>
+<sc-if value="{{o.open}}" hint-placeholder-val="{{ false }}">
+<tr style="background: #F8FAF9">
+<td colspan="6" style="padding: 4px 20px 18px">
+<div style="display: flex; flex-wrap: wrap; gap: 24px; font-size: 14px; color: #3E4F4A; line-height: 1.7">
+<span><span style="font-weight: 600">ราคาสินค้า:</span> {{o.subText}}</span>
+<span><span style="font-weight: 600">ค่าจัดส่ง:</span> ฿40</span>
+<span><span style="font-weight: 600">ชำระเงิน:</span> แบบจำลอง (เดโม)</span>
+<a href="Shop.dc.html" style="font-weight: 600">สั่งซื้ออีกครั้ง</a>
+</div>
+</td>
+</tr>
+</sc-if>
+</sc-for>
+</tbody>
+</table>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { open: '#NM-0003' };
+  }
+  renderVals() {
+    const baht = (n) => '฿' + n.toLocaleString('th-TH');
+    const ship = 40;
+    const orders = [
+      { id: '#NM-0003', date: '17 พ.ย. 2569', items: [['แมกนีเซียม', 1, 350], ['วิตามินบีรวม', 1, 320]] },
+      { id: '#NM-0002', date: '2 พ.ย. 2569', items: [['คอลลาเจนเปปไทด์', 2, 590]] },
+      { id: '#NM-0001', date: '20 ต.ค. 2569', items: [['วิตามินซี 1000 มก.', 1, 290], ['ซิงค์', 1, 250]] }
+    ];
+    const sub = (o) => o.items.reduce((t, i) => t + i[1] * i[2], 0);
+    const total = (o) => sub(o) + ship;
+    return {
+      n: orders.length,
+      sumText: baht(orders.reduce((t, o) => t + total(o), 0)),
+      last: orders[0].date,
+      orders: orders.map((o) => {
+        const open = this.state.open === o.id;
+        return {
+          id: o.id, date: o.date,
+          itemsText: o.items.map((i) => i[0] + ' × ' + i[1]).join('\n'),
+          totalText: baht(total(o)), subText: baht(sub(o)),
+          open: open, expanded: open ? 'true' : 'false', toggleLabel: open ? 'ซ่อน' : 'รายละเอียด',
+          toggle: () => this.setState({ open: open ? null : o.id })
+        };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

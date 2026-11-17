@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>App · ผลวิเคราะห์จาก AI</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&amp;family=Noto+Sans+Thai:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#F4FAF9;font-family:'Noto Sans Thai',Tahoma,sans-serif;color:#1B2A27}
+a{color:#1E7F74}a:hover{color:#165F57}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #F4FAF9">
+<header style="background: #FFFFFF; border-bottom: 1px solid #DCEBE7">
+<div style="padding: 12px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #17302C">
+<svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#1E7F74" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 26C6 14 14 6 26 6c0 12-8 20-20 20z"/><path d="M6 26l11-11"/></svg>
+<span style="font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 21px">NutriMate</span>
+</a>
+<nav aria-label="เมนูหลัก" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>ร้านค้า</a>
+<a href="Quiz.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/></svg>วิเคราะห์ไลฟ์สไตล์</a>
+<a href="Result.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-weight: 600; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#155E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg>ผลวิเคราะห์จาก AI</a>
+<a href="Cart.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>ตะกร้า<span style="min-width: 22px; padding: 1px 7px; box-sizing: border-box; border-radius: 999px; background: #1E7F74; color: #FFFFFF; font-size: 12px; font-weight: 600; text-align: center">{{cart}}</span></a>
+<a href="History.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>ประวัติการซื้อ</a>
+</nav>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 999px; background: #1E7F74"></span>{{signalChip}}</span>
+<span role="img" aria-label="ผู้ใช้ตัวอย่าง" style="width: 38px; height: 38px; border-radius: 999px; background: #BFE8DF; color: #155E56; display: flex; align-items: center; justify-content: center; font-weight: 600">ผ</span>
+</div>
+</div>
+</header>
+<div style="display: flex; flex-direction: column">
+<header style="background: transparent; padding: 24px 32px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<h1 style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 24px">ผลวิเคราะห์จาก AI</h1>
+<a href="Quiz.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border: 1px solid #C5DAD5; border-radius: 10px; color: #1B2A27; text-decoration: none; font-size: 15px">แก้คำตอบ / ทำใหม่</a>
+</header>
+<main style="padding: 28px 32px 48px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<section style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: flex-start; gap: 14px">
+<div style="flex: none; width: 44px; height: 44px; border-radius: 12px; background: #DFF4EF; display: flex; align-items: center; justify-content: center"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1E7F74" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg></div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 19px">สรุปไลฟ์สไตล์ของคุณ</h2>
+<p style="margin: 0; font-size: 16px; line-height: 1.8">คุณนอนเฉลี่ย 5–6 ชั่วโมงต่อคืน นั่งทำงานเป็นหลัก กินวันละ 2 มื้อ และมีความเครียดค่อนข้างสูง (4 จาก 5) เป้าหมายคือนอนหลับดีขึ้นและมีพลังงานระหว่างวัน</p>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+<div style="background: #F4FAF9; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5B6B66">การนอน</span><span style="font-size: 16px; font-weight: 600">5–6 ชม.</span></div>
+<div style="background: #F4FAF9; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5B6B66">การทำงาน</span><span style="font-size: 16px; font-weight: 600">นั่งโต๊ะ</span></div>
+<div style="background: #F4FAF9; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5B6B66">มื้ออาหาร</span><span style="font-size: 16px; font-weight: 600">2 มื้อ/วัน</span></div>
+<div style="background: #F4FAF9; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5B6B66">ความเครียด</span><span style="font-size: 16px; font-weight: 600">4 จาก 5</span></div>
+<div style="background: #F4FAF9; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5B6B66">BMI</span><span style="font-size: 16px; font-weight: 600">22.0 · ปกติ</span></div>
+</div>
+</section>
+<section aria-labelledby="recs" style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 8px 24px 16px; display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0">
+<h2 id="recs" style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 19px">อาหารเสริมที่ AI แนะนำ</h2>
+<button type="button" onClick="{{addAll}}" style="height: 44px; padding: 0 18px; border: 1px solid #1E7F74; border-radius: 10px; background: #FFFFFF; color: #1E7F74; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer">{{addAllLabel}}</button>
+</div>
+<sc-for list="{{recs}}" as="r" hint-placeholder-count="3">
+<article style="display: flex; flex-wrap: wrap; gap: 20px; padding: 18px 0; border-top: 1px solid #DCEBE7; align-items: flex-start">
+<div style="flex: none; width: 112px; height: 112px; border-radius: 14px; background: {{r.tint}}; display: flex; align-items: center; justify-content: center">
+<svg width="56" height="56" viewBox="0 0 64 64" fill="none" stroke="#3E4F4A" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><rect x="23" y="7" width="18" height="8" rx="2"/><path d="M20 17h24v38a4 4 0 0 1-4 4H24a4 4 0 0 1-4-4z"/><path d="M20 29h24M20 45h24"/></svg>
+</div>
+<div style="flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">{{r.name}}</h3>
+<span style="font-size: 12px; font-weight: 600; color: #1E7F74; background: #DFF4EF; padding: 3px 10px; border-radius: 999px">{{r.cat}}</span>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.7"><span style="font-weight: 600">ทำไมถึงแนะนำ: </span>{{r.why}}</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.7; color: #3E4F4A"><span style="font-weight: 600">วิธีทาน: </span>{{r.how}}</p>
+</div>
+<div style="flex: 0 0 168px; display: flex; flex-direction: column; align-items: stretch; gap: 10px">
+<span style="font-family: 'Prompt', Tahoma, sans-serif; font-size: 20px; font-weight: 600; text-align: right">{{r.priceText}}</span>
+<button type="button" onClick="{{r.add}}" style="{{r.btnStyle}}">{{r.btnLabel}}</button>
+<a href="Shop.dc.html" style="display: flex; align-items: center; justify-content: center; height: 40px; border-radius: 10px; color: #1E7F74; font-size: 14px">ดูรายละเอียดสินค้า</a>
+</div>
+</article>
+</sc-for>
+</section>
+</div>
+<div style="flex: 1 1 300px; display: flex; flex-direction: column; gap: 24px">
+<section style="background: #E6F6F2; color: #17302C; border: 1px solid #C9EAE2; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600; color: #17302C">สัญญาณสุขภาพรายสัปดาห์</h2>
+<button type="button" role="switch" aria-checked="{{signalAria}}" aria-label="เปิดหรือปิดอีเมลรายสัปดาห์" onClick="{{toggle}}" style="{{switchStyle}}"><span style="{{knobStyle}}"></span></button>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.7; color: #2F4F49">ทุกวันจันทร์ 08:00 AI จะส่งอีเมลสรุปคุณภาพอากาศ (PM2.5) ในเมืองของคุณ พร้อมเคล็ดลับประจำสัปดาห์และเตือนเมื่อใกล้ถึงเวลาซื้อซ้ำ</p>
+<label for="city" style="font-size: 13px; color: #3E5C56">เมืองของคุณ</label>
+<select id="city" style="height: 44px; padding: 0 12px; border: 1px solid #C5DAD5; border-radius: 10px; background: #FFFFFF; color: #17302C; font-family: inherit; font-size: 15px">
+<option>กรุงเทพมหานคร</option>
+<option>เชียงใหม่</option>
+<option>ขอนแก่น</option>
+<option>ภูเก็ต</option>
+</select>
+</section>
+<section style="background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">ปรับไลฟ์สไตล์เพิ่มเติม</h2>
+<ul style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.7">
+<li>เข้านอนและตื่นเวลาเดิมทุกวัน งดหน้าจอก่อนนอน</li>
+<li>ลุกเดินหรือยืดเหยียดทุก 1 ชั่วโมงระหว่างนั่งทำงาน</li>
+<li>เพิ่มมื้อเช้าเล็ก ๆ ให้ครบ 3 มื้อ</li>
+</ul>
+</section>
+<p style="margin: 0; padding: 14px 16px; background: #FFF4E0; border-radius: 12px; font-size: 13px; line-height: 1.7; color: #6B4A12">คำแนะนำนี้สร้างโดย AI ไม่ใช่คำแนะนำทางการแพทย์ หากมีโรคประจำตัว ทานยาอยู่ หรือตั้งครรภ์ ควรปรึกษาแพทย์หรือเภสัชกรก่อน</p>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1150}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { added: [], cart: 2, signal: true };
+  }
+  renderVals() {
+    const s = this.state;
+    const recs = [
+      { id: 3, name: 'แมกนีเซียม', cat: 'การนอนหลับ', price: 350, tint: '#E7E8F4', why: 'คุณนอนเพียง 5–6 ชั่วโมงและมีความเครียดสูง ตรงกับเป้าหมายเรื่องการนอน', how: 'ทานตามขนาดบนฉลาก ช่วงเย็นหรือก่อนนอน' },
+      { id: 4, name: 'วิตามินบีรวม', cat: 'พลังงาน', price: 320, tint: '#F6EEDB', why: 'คุณกินวันละ 2 มื้อ และอยากมีพลังงานระหว่างวันมากขึ้น', how: 'ทานตามขนาดบนฉลาก หลังอาหารเช้า' },
+      { id: 5, name: 'โอเมก้า-3 น้ำมันปลา', cat: 'สุขภาพทั่วไป', price: 450, tint: '#E1EEF2', why: 'เสริมจากการกินไม่ครบ 3 มื้อและกินปลาไม่บ่อย', how: 'ทานตามขนาดบนฉลาก พร้อมอาหาร' }
+    ];
+    const on = 'height: 44px; border: none; border-radius: 10px; background: #1E7F74; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer';
+    const done = 'height: 44px; border: 1px solid #1E7F74; border-radius: 10px; background: #DFF4EF; color: #1E7F74; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer';
+    const add = (id) => {
+      if (this.state.added.includes(id)) return;
+      this.setState({ added: this.state.added.concat([id]), cart: this.state.cart + 1 });
+    };
+    const missing = recs.filter((r) => !s.added.includes(r.id));
+    return {
+      cart: s.cart,
+      signalAria: s.signal ? 'true' : 'false',
+      signalChip: s.signal ? 'อีเมลสุขภาพรายสัปดาห์ · เปิด' : 'อีเมลสุขภาพรายสัปดาห์ · ปิด',
+      toggle: () => this.setState({ signal: !this.state.signal }),
+      switchStyle: 'flex: none; width: 52px; height: 30px; padding: 3px; border: none; border-radius: 999px; display: flex; cursor: pointer; ' + (s.signal ? 'background: #1E7F74; justify-content: flex-end' : 'background: #A9BDB8; justify-content: flex-start'),
+      knobStyle: 'width: 24px; height: 24px; border-radius: 999px; background: #FFFFFF; display: block',
+      addAllLabel: missing.length ? 'ใส่ทั้งหมดลงตะกร้า (' + missing.length + ')' : 'ใส่ครบทุกชิ้นแล้ว ✓',
+      addAll: () => this.setState({ added: recs.map((r) => r.id), cart: this.state.cart + missing.length }),
+      recs: recs.map((r) => {
+        const inCart = s.added.includes(r.id);
+        return { ...r, priceText: '฿' + r.price.toLocaleString('th-TH'), add: () => add(r.id), btnStyle: inCart ? done : on, btnLabel: inCart ? 'อยู่ในตะกร้าแล้ว' : 'ใส่ตะกร้า' };
+      })
+    };
+  }
+}
+</script>
+</body>
+</html>

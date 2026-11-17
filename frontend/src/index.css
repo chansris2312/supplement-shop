@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    margin: 0;
+    background: #f4faf9;
+    font-family: 'Noto Sans Thai', Tahoma, sans-serif;
+    color: #1b2a27;
+  }
+  /* Zero-specificity so any utility class on a link wins (matches inline styles in the mockups) */
+  :where(a) { color: #1e7f74; }
+  :where(a:hover) { color: #165f57; }
+  button, input, select, textarea { font-family: inherit; }
+}

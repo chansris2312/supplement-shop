@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>App · วิเคราะห์ไลฟ์สไตล์</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&amp;family=Noto+Sans+Thai:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0;background:#F4FAF9;font-family:'Noto Sans Thai',Tahoma,sans-serif;color:#1B2A27}
+a{color:#1E7F74}a:hover{color:#165F57}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-direction: column; background: #F4FAF9">
+<header style="background: #FFFFFF; border-bottom: 1px solid #DCEBE7">
+<div style="padding: 12px 32px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 10px; text-decoration: none; color: #17302C">
+<svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke="#1E7F74" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 26C6 14 14 6 26 6c0 12-8 20-20 20z"/><path d="M6 26l11-11"/></svg>
+<span style="font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 21px">NutriMate</span>
+</a>
+<nav aria-label="เมนูหลัก" style="display: flex; flex-wrap: wrap; align-items: center; gap: 4px">
+<a href="Shop.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8h12l-1 12H7z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/></svg>ร้านค้า</a>
+<a href="Quiz.dc.html" aria-current="page" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-weight: 600; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#155E56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="M9 12h6M9 16h4"/></svg>วิเคราะห์ไลฟ์สไตล์</a>
+<a href="Result.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 4.6L18 9.4l-4.2 1.8L12 16l-1.8-4.8L6 9.4l4.2-1.8z"/></svg>ผลวิเคราะห์จาก AI</a>
+<a href="Cart.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="10" cy="20" r="1.3"/><circle cx="17" cy="20" r="1.3"/></svg>ตะกร้า<span style="min-width: 22px; padding: 1px 7px; box-sizing: border-box; border-radius: 999px; background: #1E7F74; color: #FFFFFF; font-size: 12px; font-weight: 600; text-align: center">2</span></a>
+<a href="History.dc.html" style="display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; color: #17302C; text-decoration: none; font-size: 15px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3E5C56" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>ประวัติการซื้อ</a>
+</nav>
+<div style="display: flex; align-items: center; gap: 12px">
+<span style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: #DFF4EF; color: #155E56; font-size: 13px; font-weight: 600"><span style="width: 8px; height: 8px; border-radius: 999px; background: #1E7F74"></span>อีเมลสุขภาพรายสัปดาห์ · เปิด</span>
+<span role="img" aria-label="ผู้ใช้ตัวอย่าง" style="width: 38px; height: 38px; border-radius: 999px; background: #BFE8DF; color: #155E56; display: flex; align-items: center; justify-content: center; font-weight: 600">ผ</span>
+</div>
+</div>
+</header>
+<div style="display: flex; flex-direction: column">
+<header style="background: transparent; padding: 24px 32px 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px">
+<h1 style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 24px">วิเคราะห์ไลฟ์สไตล์</h1>
+<span style="font-size: 14px; color: #5B6B66">ขั้นที่ {{stepNo}} จาก {{stepTotal}}</span>
+</header>
+<main style="padding: 28px 32px 48px; display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+<nav aria-label="ขั้นตอนแบบประเมิน" style="flex: 1 1 220px; background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 4px">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="6">
+<button type="button" aria-current="{{st.current}}" onClick="{{st.go}}" style="{{st.style}}">
+<span style="{{st.dotStyle}}">{{st.mark}}</span>
+<span>{{st.title}}</span>
+</button>
+</sc-for>
+</nav>
+<section style="flex: 999 1 480px; min-width: 0; background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: 'Prompt', Tahoma, sans-serif; font-weight: 600; font-size: 22px">{{stepTitle}}</h2>
+<div style="height: 8px; background: #DCEBE7; border-radius: 999px; overflow: hidden"><div style="height: 8px; width: {{pct}}; background: #1E7F74; border-radius: 999px"></div></div>
+</div>
+<sc-if value="{{isBody}}" hint-placeholder-val="{{ true }}">
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="age" style="font-size: 14px; font-weight: 500">อายุ (ปี)</label><input id="age" type="number" value="{{age}}" onChange="{{onAge}}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid #C5DAD5; border-radius: 10px; font-size: 16px; font-family: inherit; color: #1B2A27"></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="weight" style="font-size: 14px; font-weight: 500">น้ำหนัก (กก.)</label><input id="weight" type="number" value="{{weight}}" onChange="{{onWeight}}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid #C5DAD5; border-radius: 10px; font-size: 16px; font-family: inherit; color: #1B2A27"></div>
+<div style="display: flex; flex-direction: column; gap: 6px"><label for="height" style="font-size: 14px; font-weight: 500">ส่วนสูง (ซม.)</label><input id="height" type="number" value="{{height}}" onChange="{{onHeight}}" style="height: 44px; box-sizing: border-box; padding: 0 14px; border: 1px solid #C5DAD5; border-radius: 10px; font-size: 16px; font-family: inherit; color: #1B2A27"></div>
+</div>
+<p style="margin: 0; padding: 12px 16px; background: #DFF4EF; border-radius: 10px; font-size: 15px; color: #155E56">{{bmiText}}</p>
+</sc-if>
+<sc-for list="{{qs}}" as="q" hint-placeholder-count="2">
+<fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px">
+<legend style="padding: 0; margin-bottom: 10px; font-size: 15px; font-weight: 500">{{q.label}}</legend>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<sc-for list="{{q.opts}}" as="o" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{o.pressed}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button>
+</sc-for>
+</div>
+</fieldset>
+</sc-for>
+<sc-if value="{{isLast}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="meds" style="font-size: 15px; font-weight: 500">ยาที่ทานประจำ หรือโรคประจำตัว (ถ้ามี)</label>
+<textarea id="meds" rows="3" placeholder="เช่น ยาความดัน, เบาหวาน — ถ้าไม่มีให้เว้นว่าง" value="{{meds}}" onChange="{{onMeds}}" style="box-sizing: border-box; padding: 12px 14px; border: 1px solid #C5DAD5; border-radius: 10px; font-size: 15px; font-family: inherit; color: #1B2A27; resize: vertical"></textarea>
+</div>
+<label style="display: flex; align-items: flex-start; gap: 12px; font-size: 15px; line-height: 1.6; cursor: pointer">
+<input type="checkbox" checked="{{consent}}" onChange="{{onConsent}}" style="width: 22px; height: 22px; margin: 2px 0 0; accent-color: #1E7F74">
+<span>ยินยอมให้ใช้ข้อมูลนี้เพื่อวิเคราะห์และแนะนำอาหารเสริม (ไม่ส่งชื่อหรืออีเมลให้ AI)</span>
+</label>
+</sc-if>
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid #DCEBE7">
+<button type="button" onClick="{{back}}" style="{{backStyle}}">← ย้อนกลับ</button>
+<sc-if value="{{showNext}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{next}}" style="height: 48px; padding: 0 24px; border: none; border-radius: 12px; background: #1E7F74; color: #FFFFFF; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer">ถัดไป →</button>
+</sc-if>
+<sc-if value="{{canSubmit}}" hint-placeholder-val="{{ false }}">
+<a href="Result.dc.html" style="display: inline-flex; align-items: center; height: 48px; padding: 0 24px; border-radius: 12px; background: #1E7F74; color: #FFFFFF; font-size: 16px; font-weight: 600; text-decoration: none">ส่งให้ AI วิเคราะห์ →</a>
+</sc-if>
+<sc-if value="{{needConsent}}" hint-placeholder-val="{{ false }}">
+<p style="margin: 0; padding: 12px 18px; border-radius: 12px; background: #DCEBE7; color: #4A5A55; font-size: 15px">ติ๊กยินยอมก่อนส่งให้ AI วิเคราะห์</p>
+</sc-if>
+</div>
+</section>
+<aside aria-label="สรุปคำตอบ" style="flex: 1 1 260px; background: #FFFFFF; border: 1px solid #DCEBE7; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">คำตอบของคุณ</h2>
+<sc-for list="{{summary}}" as="a" hint-placeholder-count="6">
+<div style="display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding-bottom: 10px; border-bottom: 1px solid #EEF1EF">
+<span style="color: #5B6B66">{{a.label}}</span>
+<span style="font-weight: 600; text-align: right">{{a.value}}</span>
+</div>
+</sc-for>
+<p style="margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: #6B4A12; background: #FFF4E0; padding: 10px 12px; border-radius: 10px">มียาประจำ โรคประจำตัว หรือตั้งครรภ์? AI จะแนะนำให้ปรึกษาแพทย์หรือเภสัชกรก่อน</p>
+</aside>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      step: 1, age: '24', weight: '62', height: '168', meds: '', consent: true,
+      ans: { sleep: '5–6 ชม.', work: 'นั่งโต๊ะเป็นหลัก', meals: '2 มื้อ', stress: '4', goal: ['การนอนหลับ', 'พลังงาน'] }
+    };
+  }
+  renderVals() {
+    const s = this.state;
+    const steps = [
+      { title: 'ข้อมูลร่างกาย', qs: [] },
+      { title: 'การนอนหลับ', qs: [
+        { id: 'sleep', short: 'การนอน', label: 'นอนกี่ชั่วโมงต่อคืน', opts: ['น้อยกว่า 5 ชม.', '5–6 ชม.', '7–8 ชม.', 'มากกว่า 8 ชม.'] },
+        { id: 'sleepq', short: 'คุณภาพการนอน', label: 'คุณภาพการนอน', opts: ['หลับยาก', 'ตื่นกลางดึกบ่อย', 'หลับสบาย'] } ] },
+      { title: 'การทำงาน', qs: [
+        { id: 'work', short: 'ลักษณะงาน', label: 'ลักษณะงานส่วนใหญ่', opts: ['นั่งโต๊ะเป็นหลัก', 'ยืนหรือเดินบ่อย', 'ใช้แรงงาน', 'ทำงานเป็นกะ / กะดึก'] },
+        { id: 'hours', short: 'ชั่วโมงทำงาน', label: 'ชั่วโมงทำงานต่อวัน', opts: ['น้อยกว่า 8 ชม.', '8–10 ชม.', 'มากกว่า 10 ชม.'] } ] },
+      { title: 'อาหารการกิน', qs: [
+        { id: 'meals', short: 'มื้ออาหาร', label: 'กินอาหารกี่มื้อต่อวัน', opts: ['1 มื้อ', '2 มื้อ', '3 มื้อ', '4 มื้อขึ้นไป'] },
+        { id: 'diet', short: 'รูปแบบการกิน', label: 'รูปแบบการกิน', opts: ['ทั่วไป', 'มังสวิรัติ', 'วีแกน', 'คาร์บต่ำ / คีโต'] },
+        { id: 'veg', short: 'ผักผลไม้', label: 'กินผักและผลไม้', opts: ['แทบไม่กิน', 'บางมื้อ', 'ทุกมื้อ'] } ] },
+      { title: 'ออกกำลังกายและความเครียด', qs: [
+        { id: 'ex', short: 'ออกกำลังกาย', label: 'ออกกำลังกายกี่วันต่อสัปดาห์', opts: ['ไม่ออกเลย', '1–2 วัน', '3–4 วัน', '5 วันขึ้นไป'] },
+        { id: 'stress', short: 'ความเครียด', label: 'ระดับความเครียด (1 = น้อย, 5 = มาก)', opts: ['1', '2', '3', '4', '5'] } ] },
+      { title: 'เป้าหมายและสุขภาพ', qs: [
+        { id: 'goal', short: 'เป้าหมาย', label: 'อยากดูแลเรื่องไหน (เลือกได้หลายข้อ)', multi: true, opts: ['ผิวพรรณ', 'การนอนหลับ', 'พลังงาน', 'ภูมิคุ้มกัน', 'กระดูกและข้อ'] },
+        { id: 'preg', short: 'ตั้งครรภ์/ให้นมบุตร', label: 'ตั้งครรภ์หรือให้นมบุตร', opts: ['ใช่', 'ไม่ใช่', 'ไม่เกี่ยวข้อง'] } ] }
+    ];
+    const ans = s.ans;
+    const has = (q) => (q.multi ? (ans[q.id] || []).length > 0 : !!ans[q.id]);
+    const isOn = (q, o) => (q.multi ? (ans[q.id] || []).includes(o) : ans[q.id] === o);
+    const pick = (q, o) => {
+      const next = { ...this.state.ans };
+      if (q.multi) {
+        const cur = next[q.id] || [];
+        next[q.id] = cur.includes(o) ? cur.filter((x) => x !== o) : cur.concat([o]);
+      } else {
+        next[q.id] = o;
+      }
+      this.setState({ ans: next });
+    };
+    const w = parseFloat(s.weight), h = parseFloat(s.height) / 100;
+    const bodyOk = w > 0 && h > 0;
+    const bmi = bodyOk ? w / (h * h) : 0;
+    const band = bmi < 18.5 ? 'น้ำหนักน้อย' : bmi < 23 ? 'ปกติ' : bmi < 25 ? 'น้ำหนักเกิน' : 'อ้วน';
+    const stepDone = (i) => (i === 0 ? bodyOk : steps[i].qs.every(has));
+    const pillBase = 'min-height: 44px; padding: 0 18px; border-radius: 999px; font-family: inherit; font-size: 15px; cursor: pointer; ';
+    const pillOn = pillBase + 'background: #1E7F74; color: #FFFFFF; border: 1px solid #1E7F74; font-weight: 600';
+    const pillOff = pillBase + 'background: #FFFFFF; color: #1B2A27; border: 1px solid #C5DAD5';
+    const navBase = 'display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; border: none; border-radius: 10px; font-family: inherit; font-size: 15px; text-align: left; cursor: pointer; ';
+    const dotBase = 'flex: none; width: 28px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; ';
+    const cur = s.step;
+    const last = steps.length - 1;
+    const summary = [{ label: 'BMI', value: bodyOk ? bmi.toFixed(1) + ' · ' + band : '—' }];
+    steps.forEach((st) => st.qs.forEach((q) => { if (has(q)) summary.push({ label: q.short, value: q.multi ? ans[q.id].join(', ') : ans[q.id] }); }));
+    return {
+      stepNo: cur + 1, stepTotal: steps.length, stepTitle: steps[cur].title,
+      pct: Math.round(((cur + 1) / steps.length) * 100) + '%',
+      isBody: cur === 0, isLast: cur === last,
+      showNext: cur < last, canSubmit: cur === last && s.consent, needConsent: cur === last && !s.consent,
+      age: s.age, weight: s.weight, height: s.height, meds: s.meds, consent: s.consent,
+      bmiText: bodyOk ? 'BMI ของคุณ ' + bmi.toFixed(1) + ' · ' + band + ' (เกณฑ์คนเอเชีย)' : 'กรอกน้ำหนักและส่วนสูงเพื่อดูค่า BMI',
+      onAge: (e) => this.setState({ age: e.target.value }),
+      onWeight: (e) => this.setState({ weight: e.target.value }),
+      onHeight: (e) => this.setState({ height: e.target.value }),
+      onMeds: (e) => this.setState({ meds: e.target.value }),
+      onConsent: (e) => this.setState({ consent: e.target.checked }),
+      back: () => this.setState({ step: Math.max(0, this.state.step - 1) }),
+      next: () => this.setState({ step: Math.min(last, this.state.step + 1) }),
+      backStyle: 'height: 48px; padding: 0 20px; border: 1px solid #C5DAD5; border-radius: 12px; background: #FFFFFF; font-family: inherit; font-size: 15px; ' + (cur === 0 ? 'color: #8A9792; cursor: default' : 'color: #1B2A27; cursor: pointer'),
+      steps: steps.map((st, i) => {
+        const done = stepDone(i), here = i === cur;
+        return {
+          title: st.title,
+          current: here ? 'step' : 'false',
+          mark: done && !here ? '✓' : String(i + 1),
+          go: () => this.setState({ step: i }),
+          style: navBase + (here ? 'background: #DFF4EF; color: #155E56; font-weight: 600' : 'background: #FFFFFF; color: #1B2A27'),
+          dotStyle: dotBase + (here ? 'background: #1E7F74; color: #FFFFFF' : done ? 'background: #DFF4EF; color: #1E7F74' : 'background: #EEF1EF; color: #4A5A55')
+        };
+      }),
+      qs: steps[cur].qs.map((q) => ({
+        label: q.label,
+        opts: q.opts.map((o) => ({ label: o, pressed: isOn(q, o) ? 'true' : 'false', style: isOn(q, o) ? pillOn : pillOff, pick: () => pick(q, o) }))
+      })),
+      summary: summary
+    };
+  }
+}
+</script>
+</body>
+</html>
